@@ -1,0 +1,6 @@
+google-genai
+pyautogui
+pynput
+pillow
+ttkbootstrap
+requests

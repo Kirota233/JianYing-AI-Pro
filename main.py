@@ -107,13 +107,13 @@ class RedirectText(object):
 class SmartJianYingGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("剪映 AI 全自动生产力工具箱")
-        self.root.geometry("550x700")
+        self.root.title("剪映 AI 生产力工具箱 - 专业版")
+        self.root.geometry("650x750")
         self.root.attributes('-topmost', True)
         
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
-        self.root.geometry(f"+{screen_width - 570}+{screen_height - 750}")
+        self.root.geometry(f"+{screen_width - 670}+{screen_height - 800}")
         
         self.coords = {
             "export": None,
@@ -634,6 +634,11 @@ class SmartJianYingGUI:
 
 if __name__ == "__main__":
     check_authorization()
-    app = tb.Window("剪映 AI 全自动生产力工具箱", themename="superhero")
+    app = tb.Window("剪映 AI 生产力工具箱", themename="litera")
+    
+    # 全局字体稍微放大，看起来更大气
+    style = tb.Style()
+    style.configure('.', font=('Helvetica', 10))
+    
     gui = SmartJianYingGUI(app)
     app.mainloop()
