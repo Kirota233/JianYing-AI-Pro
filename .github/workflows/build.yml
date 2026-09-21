@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -27,7 +30,7 @@ jobs:
         pyinstaller --noconsole --onefile --name JianYing-AI-Pro main.py
         
     - name: Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: dist/JianYing-AI-Pro.exe
       env:

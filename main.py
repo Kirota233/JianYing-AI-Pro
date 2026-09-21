@@ -19,8 +19,8 @@ from ttkbootstrap.constants import *
 # ==========================================
 # 授权控制与自动更新模块 (Kill-Switch & Auto-Updater)
 # ==========================================
-AUTH_URL = "https://gist.githubusercontent.com/Kirota233/db0d3500cf669ded30fb405c6d4bfd5a/raw/115393d6ae040c6ea5c31542a2b8d23f7e1afefa/auth.json" 
-APP_VERSION = "1.0.0"
+AUTH_URL = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
+APP_VERSION = "1.0.1"
 
 def check_authorization():
     if "placeholder" in AUTH_URL:
