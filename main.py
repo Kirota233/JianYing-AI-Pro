@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.2.4"
+VERSION   = "1.2.5"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -361,10 +361,13 @@ class App(ctk.CTk):
         self.fmt_entry.insert(0, "短剧名称_第X集")
         self.fmt_entry.pack(fill="x", padx=8, pady=(6, 8))
         
-        ctk.CTkButton(tab, text="✨  AI 预览重命名", height=34, corner_radius=8,
+        self.ren_preview_btn = ctk.CTkButton(tab, text="✨  AI 预览重命名", height=34, corner_radius=8,
                       fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
-                      font=("Segoe UI", 11, "bold"), command=self._ren_preview_thread
-                      ).pack(fill="x", padx=4, pady=6)
+                      font=("Segoe UI", 11, "bold"), command=self._ren_preview_thread)
+        self.ren_preview_btn.pack(fill="x", padx=4, pady=(6, 2))
+        
+        self.ren_progress = ctk.CTkProgressBar(tab, mode="indeterminate", height=4, fg_color=C_BG)
+        self.ren_progress.set(0)
         
         style = ttk.Style()
         style.configure("R.Treeview", background=C_CARD, foreground=C_TEXT,
@@ -389,7 +392,10 @@ class App(ctk.CTk):
         self.ren_btn.pack(fill="x", padx=4, pady=6)
 
     def _sel_vids(self):
-        f = filedialog.askopenfilenames(filetypes=[("视频", "*.mp4 *.mov *.avi *.mkv"), ("全部", "*.*")])
+        f = filedialog.askopenfilenames(
+            title="选择视频或字幕文件（可多选）",
+            filetypes=[("视频/字幕", "*.mp4 *.mov *.avi *.mkv *.srt *.ass"), ("全部", "*.*")]
+        )
         if f:
             self.sel_files = list(f)
             self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
@@ -708,7 +714,10 @@ class App(ctk.CTk):
 
     # ═══════════════════════ 重命名 ═══════════════════════
     def _ren_preview_thread(self):
-        if not self.sel_files: self._show_toast("提示", "请先选择视频文件", C_WARN); return
+        if not self.sel_files: self._show_toast("提示", "请先选择视频/字幕文件", C_WARN); return
+        self.ren_preview_btn.configure(state="disabled", text="⏳ AI 正在思考中...")
+        self.ren_progress.pack(fill="x", padx=12, pady=(0, 4))
+        self.ren_progress.start()
         threading.Thread(target=self._ren_preview, daemon=True).start()
 
     def _ren_preview(self):
@@ -728,9 +737,17 @@ class App(ctk.CTk):
             if t.endswith("```"): t = t[:-3]
             data = json.loads(t.strip())
             self.after(0, self._fill_ren, data)
-        except Exception as e: self._log(f"✗ {e}")
+        except Exception as e: 
+            self._log(f"✗ {e}")
+            self.after(0, self._reset_ren_ui)
+
+    def _reset_ren_ui(self):
+        self.ren_preview_btn.configure(state="normal", text="✨  AI 预览重命名")
+        self.ren_progress.stop()
+        self.ren_progress.pack_forget()
 
     def _fill_ren(self, data):
+        self._reset_ren_ui()
         for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
         dm = {os.path.basename(f): os.path.dirname(f) for f in self.sel_files}
         self.rename_map = []
