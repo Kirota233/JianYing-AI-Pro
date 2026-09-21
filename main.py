@@ -15,7 +15,7 @@ from google.genai import types
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.2.0"
+VERSION   = "1.2.1"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -476,7 +476,8 @@ class App(ctk.CTk):
                 "Return ONLY raw JSON array: [{\"box\":[y1,x1,y2,x2],\"name\":\"title\"},...]\n"
                 "No markdown."
             )
-            r = self._client().models.generate_content(
+            client = self._client()
+            r = client.models.generate_content(
                 model='gemini-3.6-flash', contents=[img, prompt],
                 config=types.GenerateContentConfig(temperature=0.1))
             
@@ -689,7 +690,8 @@ class App(ctk.CTk):
                   f"Files: {json.dumps(fns, ensure_ascii=False)}\n"
                   f"Return ONLY raw JSON array with 'old' and 'new' keys.")
         try:
-            r = self._client().models.generate_content(
+            client = self._client()
+            r = client.models.generate_content(
                 model='gemini-3.6-flash', contents=prompt,
                 config=types.GenerateContentConfig(temperature=0.1))
             t = r.text.strip()
