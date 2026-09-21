@@ -13,9 +13,11 @@ from pynput import keyboard
 from google import genai
 from google.genai import types
 
+pyautogui.FAILSAFE = False
+
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.2.3"
+VERSION   = "1.2.4"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -61,6 +63,7 @@ class App(ctk.CTk):
         self.drafts = []          
         self.sel_files = []
         self.rename_map = []
+        self.first_run = True
         
         self._load_cfg()
         self._build_ui()
@@ -123,17 +126,17 @@ class App(ctk.CTk):
         self.after(duration, toast.destroy)
 
     # ─── 程序内自定义确认框 ───
-    def _ask_yes_no(self, title, message, on_yes):
+    def _ask_yes_no(self, title, message, on_yes, show_cancel=True):
         overlay = ctk.CTkFrame(self, fg_color="#000000")
         overlay.place(relwidth=1.0, relheight=1.0)
         overlay.configure(bg_color="transparent")
         
-        dialog = ctk.CTkFrame(overlay, fg_color=C_CARD, corner_radius=12, width=320, height=180)
+        dialog = ctk.CTkFrame(overlay, fg_color=C_CARD, corner_radius=12, width=340, height=220)
         dialog.place(relx=0.5, rely=0.5, anchor="center")
         dialog.pack_propagate(False)
         
         ctk.CTkLabel(dialog, text=title, font=("Segoe UI", 14, "bold"), text_color=C_TEXT).pack(pady=(20, 10))
-        ctk.CTkLabel(dialog, text=message, font=("Segoe UI", 12), text_color=C_TEXT, justify="center").pack(pady=(0, 20))
+        ctk.CTkLabel(dialog, text=message, font=("Segoe UI", 12), text_color=C_TEXT, justify="left").pack(pady=(0, 20), padx=20)
         
         bf = ctk.CTkFrame(dialog, fg_color="transparent")
         bf.pack(fill="x", padx=20, side="bottom", pady=20)
@@ -141,19 +144,28 @@ class App(ctk.CTk):
         def _yes(): overlay.destroy(); on_yes()
         def _no(): overlay.destroy()
         
-        ctk.CTkButton(bf, text="取消", fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER, width=100, command=_no).pack(side="left", expand=True, padx=5)
-        ctk.CTkButton(bf, text="确认", fg_color=C_PRIMARY, hover_color="#2563eb", width=100, command=_yes).pack(side="right", expand=True, padx=5)
+        if show_cancel:
+            ctk.CTkButton(bf, text="取消", fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER, width=100, command=_no).pack(side="left", expand=True, padx=5)
+        ctk.CTkButton(bf, text="我已知晓" if not show_cancel else "确认", fg_color=C_PRIMARY, hover_color="#2563eb", width=100, command=_yes).pack(side="right", expand=True, padx=5)
 
     def _client(self):
         k = self.key_entry.get().strip() or DEFAULT_KEY
         return genai.Client(api_key=k)
 
     def _show_startup_guide(self):
-        self._show_toast("⚠️ 重要提示", 
-            "1. 请不要把本程序窗口遮挡住剪映的草稿封面\n"
-            "2. 草稿必须从云空间下载，且绝对不能打开过\n"
-            "3. 录制坐标请用废弃草稿", 
-            C_WARN, 8000)
+        if self.first_run:
+            self.first_run = False
+            self._save_cfg()
+            msg = (
+                "1. 请不要把本程序窗口遮挡住剪映的草稿封面\n"
+                "2. 草稿必须从云空间下载，且绝对不能打开过\n"
+                "3. 录制坐标请用废弃草稿进行\n\n"
+                "【网络建议】\n"
+                "本程序核心 AI 强依赖 Google Gemini。\n"
+                "• 强烈建议在设置中填入您自己的 API Key\n"
+                "• 使用 AI 功能时必须开启代理环境(科学上网)"
+            )
+            self._ask_yes_no("⚠️ 首次运行须知", msg, lambda: None, show_cancel=False)
 
     def _load_cfg(self):
         if os.path.exists(CFG_FILE):
@@ -162,11 +174,13 @@ class App(ctk.CTk):
                 self.coords = d.get("coords", self.coords)
                 self.close_color = tuple(d["color"]) if d.get("color") else None
                 self.api_key = d.get("api_key", DEFAULT_KEY)
+                self.first_run = d.get("first_run", True)
             except: pass
 
     def _save_cfg(self):
         json.dump({"coords": self.coords, "color": self.close_color,
-                    "api_key": self.key_entry.get().strip()},
+                    "api_key": self.key_entry.get().strip(),
+                    "first_run": self.first_run},
                    open(CFG_FILE, "w"))
 
     # ═══════════════════════ UI 构建 ═══════════════════════
@@ -400,10 +414,15 @@ class App(ctk.CTk):
         self.key_entry.insert(0, self.api_key)
         self.key_entry.pack(fill="x", padx=8, pady=(0, 8))
         
-        ctk.CTkButton(card, text="保存设置", height=32, corner_radius=6,
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=8, pady=(0,8))
+        
+        ctk.CTkLabel(row, text="作者 - 塔奇", font=("Segoe UI", 11), text_color=C_MUTED).pack(side="left")
+        
+        ctk.CTkButton(row, text="保存设置", height=32, corner_radius=6,
                       fg_color=C_PRIMARY, font=("Segoe UI", 11),
                       command=lambda: (self._save_cfg(), self._show_toast("✓", "设置已保存", C_SUCCESS))
-                      ).pack(anchor="e", padx=8, pady=(0,8))
+                      ).pack(side="right")
 
     # ═══════════════════════ 辅助组件 ═══════════════════════
     def _card(self, parent):
