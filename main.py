@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.2.5"
+VERSION   = "1.2.6"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -127,22 +127,17 @@ class App(ctk.CTk):
 
     # ─── 程序内自定义确认框 ───
     def _ask_yes_no(self, title, message, on_yes, show_cancel=True):
-        overlay = ctk.CTkFrame(self, fg_color="#000000")
-        overlay.place(relwidth=1.0, relheight=1.0)
-        overlay.configure(bg_color="transparent")
-        
-        dialog = ctk.CTkFrame(overlay, fg_color=C_CARD, corner_radius=12, width=340, height=220)
+        dialog = ctk.CTkFrame(self, fg_color=C_CARD, corner_radius=12, border_width=2, border_color=C_BORDER)
         dialog.place(relx=0.5, rely=0.5, anchor="center")
-        dialog.pack_propagate(False)
         
         ctk.CTkLabel(dialog, text=title, font=("Segoe UI", 14, "bold"), text_color=C_TEXT).pack(pady=(20, 10))
-        ctk.CTkLabel(dialog, text=message, font=("Segoe UI", 12), text_color=C_TEXT, justify="left").pack(pady=(0, 20), padx=20)
+        ctk.CTkLabel(dialog, text=message, font=("Segoe UI", 12), text_color=C_TEXT, justify="left").pack(pady=(0, 20), padx=24)
         
         bf = ctk.CTkFrame(dialog, fg_color="transparent")
-        bf.pack(fill="x", padx=20, side="bottom", pady=20)
+        bf.pack(fill="x", padx=20, side="bottom", pady=(0, 20))
         
-        def _yes(): overlay.destroy(); on_yes()
-        def _no(): overlay.destroy()
+        def _yes(): dialog.destroy(); on_yes()
+        def _no(): dialog.destroy()
         
         if show_cancel:
             ctk.CTkButton(bf, text="取消", fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER, width=100, command=_no).pack(side="left", expand=True, padx=5)
