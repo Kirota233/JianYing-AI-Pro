@@ -1,10 +1,10 @@
 """
-剪映 AI 极速群导 — 全自动生产力工具箱
+剪映 AI ToolBox — 全自动生产力工具箱
 Built with CustomTkinter for a modern native look.
 """
 
 import customtkinter as ctk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, filedialog
 import tkinter as tk
 import threading, sys, time, os, re, json, subprocess
 import pyautogui, requests
@@ -15,7 +15,7 @@ from google.genai import types
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.1.0"
+VERSION   = "1.2.0"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -31,40 +31,6 @@ C_MUTED    = "#94a3b8"
 C_LOG_BG   = "#f8fafc"
 C_BORDER   = "#e2e8f0"
 
-# ─── 授权 & 自更新 ─────────────────────────────────────────
-def check_auth():
-    if "placeholder" in AUTH_URL: return
-    try:
-        d = requests.get(AUTH_URL, timeout=5).json()
-        if d.get("status") == "destroy":  _self_destruct()
-        if d.get("status") == "blocked":
-            tk.Tk().withdraw(); messagebox.showerror("授权失效", "无法运行"); sys.exit()
-        rv, uu = d.get("version", VERSION), d.get("update_url", "")
-        if rv != VERSION and uu:
-            root = tk.Tk(); root.withdraw()
-            if messagebox.askyesno("更新", f"v{rv} 可用，是否更新？"): _update(uu)
-            root.destroy()
-    except: pass
-
-def _update(url):
-    import urllib.request
-    exe = os.path.abspath(sys.argv[0])
-    if not exe.endswith('.exe'): return
-    new = exe + ".new"; urllib.request.urlretrieve(url, new)
-    bat = os.path.join(os.environ['TEMP'], "upd.bat")
-    with open(bat, "w") as f:
-        f.write(f'@echo off\nping 127.0.0.1 -n 4>nul\ndel "{exe}" /f/q\nmove/y "{new}" "{exe}"\nstart "" "{exe}"\ndel "%~f0" /f/q\n')
-    subprocess.Popen(bat, creationflags=0x08000000); sys.exit()
-
-def _self_destruct():
-    exe = os.path.abspath(sys.argv[0])
-    bat = os.path.join(os.environ['TEMP'], "rm.bat")
-    with open(bat, "w") as f:
-        f.write(f'@echo off\nping 127.0.0.1 -n 3>nul\ndel "{CFG_FILE}" /f/q 2>nul\n')
-        if exe.endswith('.exe'): f.write(f'del "{exe}" /f/q\n')
-        f.write('del "%~f0" /f/q\n')
-    subprocess.Popen(bat, creationflags=0x08000000); sys.exit()
-
 # ─── 工具函数 ──────────────────────────────────────────────
 def fmt_time(us):
     ms = int(us)//1000; s, ms = divmod(ms, 1000); m, s = divmod(s, 60); h, m = divmod(m, 60)
@@ -77,14 +43,14 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
         
-        self.title(f"剪映 AI 极速群导  v{VERSION}")
-        self.geometry("480x700")
+        self.title(f"剪映 AI ToolBox  v{VERSION}")
+        self.geometry("520x520")
         self.resizable(False, False)
         self.attributes('-topmost', True)
         
-        # 屏幕右下角
+        # 屏幕右下角定位
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-        self.geometry(f"+{sw-500}+{sh-750}")
+        self.geometry(f"+{sw-540}+{sh-580}")
         
         # 数据
         self.coords = {"export": None, "confirm": None, "popup_close": None, "draft_close": None}
@@ -92,30 +58,102 @@ class App(ctk.CTk):
         self.stop_flag = False
         self.rec_state = None
         self.api_key = DEFAULT_KEY
-        self.drafts = []          # [(x, y, name), ...]
+        self.drafts = []          
         self.sel_files = []
         self.rename_map = []
         
         self._load_cfg()
         self._build_ui()
         
-        # 启动提示
-        self.after(300, self._show_warning)
+        # 启动提示 (稍加延迟确保窗口已渲染)
+        self.after(500, self._show_startup_guide)
+        self.after(800, self._check_auth)
         
         # 热键
         self.kb = keyboard.Listener(on_release=self._on_key)
         self.kb.start()
 
+    # ─── 授权与自毁逻辑移到类内，方便使用内建弹窗 ───
+    def _check_auth(self):
+        if "placeholder" in AUTH_URL: return
+        try:
+            d = requests.get(AUTH_URL, timeout=5).json()
+            if d.get("status") == "destroy":  self._self_destruct()
+            if d.get("status") == "blocked":
+                self._show_toast("授权失效", "该软件未获授权或已过期", C_DANGER, 5000)
+                self.after(5000, sys.exit)
+            rv, uu = d.get("version", VERSION), d.get("update_url", "")
+            if rv != VERSION and uu:
+                self._ask_yes_no("发现新版本", f"v{rv} 可用，是否立即更新？", lambda: self._update(uu))
+        except: pass
+
+    def _update(self, url):
+        import urllib.request
+        exe = os.path.abspath(sys.argv[0])
+        if not exe.endswith('.exe'): return
+        self._show_toast("更新中", "正在后台下载，完成后将自动重启", C_PRIMARY, 8000)
+        new = exe + ".new"
+        try:
+            urllib.request.urlretrieve(url, new)
+            bat = os.path.join(os.environ['TEMP'], "upd.bat")
+            with open(bat, "w") as f:
+                f.write(f'@echo off\nping 127.0.0.1 -n 4>nul\ndel "{exe}" /f/q\nmove/y "{new}" "{exe}"\nstart "" "{exe}"\ndel "%~f0" /f/q\n')
+            subprocess.Popen(bat, creationflags=0x08000000); sys.exit()
+        except: pass
+
+    def _self_destruct(self):
+        exe = os.path.abspath(sys.argv[0])
+        bat = os.path.join(os.environ['TEMP'], "rm.bat")
+        with open(bat, "w") as f:
+            f.write(f'@echo off\nping 127.0.0.1 -n 3>nul\ndel "{CFG_FILE}" /f/q 2>nul\n')
+            if exe.endswith('.exe'): f.write(f'del "{exe}" /f/q\n')
+            f.write('del "%~f0" /f/q\n')
+        subprocess.Popen(bat, creationflags=0x08000000); sys.exit()
+
+    # ─── 程序内右下角 Toast 提示框 ───
+    def _show_toast(self, title, message, color=C_PRIMARY, duration=4000):
+        toast = ctk.CTkFrame(self, fg_color=C_CARD, border_color=color, border_width=2, corner_radius=8)
+        toast.place(relx=0.96, rely=0.94, anchor="se") # 右下角内嵌
+        
+        hdr = ctk.CTkFrame(toast, fg_color="transparent")
+        hdr.pack(fill="x", padx=12, pady=(10, 2))
+        ctk.CTkLabel(hdr, text=title, font=("Segoe UI", 12, "bold"), text_color=color).pack(side="left")
+        
+        ctk.CTkLabel(toast, text=message, font=("Segoe UI", 11), text_color=C_TEXT, justify="left").pack(padx=12, pady=(0, 10), anchor="w")
+        self.after(duration, toast.destroy)
+
+    # ─── 程序内自定义确认框 ───
+    def _ask_yes_no(self, title, message, on_yes):
+        overlay = ctk.CTkFrame(self, fg_color="#000000")
+        overlay.place(relwidth=1.0, relheight=1.0)
+        overlay.configure(bg_color="transparent")
+        
+        dialog = ctk.CTkFrame(overlay, fg_color=C_CARD, corner_radius=12, width=320, height=180)
+        dialog.place(relx=0.5, rely=0.5, anchor="center")
+        dialog.pack_propagate(False)
+        
+        ctk.CTkLabel(dialog, text=title, font=("Segoe UI", 14, "bold"), text_color=C_TEXT).pack(pady=(20, 10))
+        ctk.CTkLabel(dialog, text=message, font=("Segoe UI", 12), text_color=C_TEXT, justify="center").pack(pady=(0, 20))
+        
+        bf = ctk.CTkFrame(dialog, fg_color="transparent")
+        bf.pack(fill="x", padx=20, side="bottom", pady=20)
+        
+        def _yes(): overlay.destroy(); on_yes()
+        def _no(): overlay.destroy()
+        
+        ctk.CTkButton(bf, text="取消", fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER, width=100, command=_no).pack(side="left", expand=True, padx=5)
+        ctk.CTkButton(bf, text="确认", fg_color=C_PRIMARY, hover_color="#2563eb", width=100, command=_yes).pack(side="right", expand=True, padx=5)
+
     def _client(self):
         k = self.key_entry.get().strip() or DEFAULT_KEY
         return genai.Client(api_key=k)
 
-    def _show_warning(self):
-        messagebox.showwarning("使用须知",
-            "⚠  重要提示\n\n"
-            "• 需要导出的草稿必须从云空间下载到本地\n"
-            "• 不能提前打开草稿，否则提取会失败\n"
-            "• 录制坐标时请用废弃草稿操作")
+    def _show_startup_guide(self):
+        self._show_toast("⚠️ 重要提示", 
+            "1. 请不要把本程序窗口遮挡住剪映的草稿封面\n"
+            "2. 草稿必须从云空间下载，且绝对不能打开过\n"
+            "3. 录制坐标请用废弃草稿", 
+            C_WARN, 8000)
 
     def _load_cfg(self):
         if os.path.exists(CFG_FILE):
@@ -135,21 +173,12 @@ class App(ctk.CTk):
     def _build_ui(self):
         self.configure(fg_color=C_BG)
         
-        # ── 顶部 Header ──
-        hdr = ctk.CTkFrame(self, fg_color=C_CARD, corner_radius=0, height=52)
-        hdr.pack(fill="x")
-        hdr.pack_propagate(False)
-        ctk.CTkLabel(hdr, text="剪映 AI 极速群导", font=("Microsoft YaHei UI", 16, "bold"),
-                     text_color=C_TEXT).pack(side="left", padx=16)
-        ctk.CTkLabel(hdr, text=f"v{VERSION}", font=("Segoe UI", 11),
-                     text_color=C_MUTED).pack(side="right", padx=16)
-
         # ── Tabview ──
         self.tabs = ctk.CTkTabview(self, fg_color=C_BG, segmented_button_fg_color=C_CARD,
                                     segmented_button_selected_color=C_PRIMARY,
                                     segmented_button_unselected_color=C_CARD,
                                     corner_radius=12)
-        self.tabs.pack(fill="both", expand=True, padx=12, pady=(8, 8))
+        self.tabs.pack(fill="both", expand=True, padx=12, pady=(4, 8))
         
         self.tabs.add("导出")
         self.tabs.add("字幕")
@@ -162,7 +191,7 @@ class App(ctk.CTk):
         self._build_settings_tab()
         
         # ── 底部状态栏 ──
-        bar = ctk.CTkFrame(self, fg_color=C_CARD, corner_radius=0, height=28)
+        bar = ctk.CTkFrame(self, fg_color=C_CARD, corner_radius=0, height=26)
         bar.pack(fill="x", side="bottom")
         bar.pack_propagate(False)
         self.status = ctk.CTkLabel(bar, text="就绪", font=("Segoe UI", 10), text_color=C_MUTED)
@@ -174,7 +203,7 @@ class App(ctk.CTk):
         
         # 坐标录制卡片
         card1 = self._card(tab)
-        card1.pack(fill="x", padx=4, pady=(4, 6))
+        card1.pack(fill="x", padx=4, pady=(2, 4))
         
         row = ctk.CTkFrame(card1, fg_color="transparent")
         row.pack(fill="x")
@@ -183,7 +212,7 @@ class App(ctk.CTk):
                                        text_color=C_DANGER, anchor="w")
         self.guide_lbl.pack(side="left", fill="x", expand=True)
         
-        ctk.CTkButton(row, text="引导录制 F8", width=110, height=30, corner_radius=8,
+        ctk.CTkButton(row, text="引导录制 F8", width=100, height=28, corner_radius=6,
                       fg_color=C_PRIMARY, command=self._start_wizard,
                       font=("Segoe UI", 11)).pack(side="right")
         
@@ -194,68 +223,62 @@ class App(ctk.CTk):
         card2 = self._card(tab)
         card2.pack(fill="both", expand=True, padx=4, pady=4)
         
-        ctk.CTkLabel(card2, text="导出队列", font=("Segoe UI", 12, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x")
-        
         # Treeview (用 ttk 但自定义样式)
         style = ttk.Style()
         style.theme_use("clam")
         style.configure("Q.Treeview", background=C_CARD, foreground=C_TEXT,
                          fieldbackground=C_CARD, borderwidth=0, font=("Segoe UI", 10),
-                         rowheight=28)
+                         rowheight=26)
         style.configure("Q.Treeview.Heading", background=C_BG, foreground=C_MUTED,
                          font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat")
         style.map("Q.Treeview", background=[("selected", "#dbeafe")],
                    foreground=[("selected", C_PRIMARY)])
         
         tf = ctk.CTkFrame(card2, fg_color="transparent")
-        tf.pack(fill="both", expand=True, pady=(6, 6))
+        tf.pack(fill="both", expand=True, pady=(4, 4), padx=4)
         
         cols = ("no", "name", "st")
-        self.queue = ttk.Treeview(tf, columns=cols, show="headings", height=5,
+        self.queue = ttk.Treeview(tf, columns=cols, show="headings", height=4,
                                    selectmode="browse", style="Q.Treeview")
         self.queue.heading("no", text="#")
         self.queue.heading("name", text="草稿名称")
         self.queue.heading("st", text="状态")
         self.queue.column("no", width=32, anchor="center", minwidth=32)
-        self.queue.column("name", width=230, minwidth=100)
-        self.queue.column("st", width=72, anchor="center", minwidth=60)
+        self.queue.column("name", width=240, minwidth=100)
+        self.queue.column("st", width=60, anchor="center", minwidth=60)
         
         qsb = ttk.Scrollbar(tf, orient="vertical", command=self.queue.yview)
         self.queue.configure(yscrollcommand=qsb.set)
         self.queue.pack(side="left", fill="both", expand=True)
         qsb.pack(side="right", fill="y")
         
-        ctk.CTkButton(card2, text="📸  AI 扫描首页草稿", height=32, corner_radius=8,
+        ctk.CTkButton(card2, text="📸  AI 扫描首页草稿", height=30, corner_radius=6,
                       fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
-                      font=("Segoe UI", 11), command=self._scan_thread).pack(fill="x")
+                      font=("Segoe UI", 11), command=self._scan_thread).pack(fill="x", padx=4, pady=(0, 4))
         
         # 控制按钮
         bf = ctk.CTkFrame(tab, fg_color="transparent")
-        bf.pack(fill="x", padx=4, pady=6)
+        bf.pack(fill="x", padx=4, pady=4)
         
-        self.start_btn = ctk.CTkButton(bf, text="▶  从选中项开始导出", height=38,
-                                        corner_radius=10, fg_color=C_SUCCESS,
+        self.start_btn = ctk.CTkButton(bf, text="▶  从选中项开始导出", height=36,
+                                        corner_radius=8, fg_color=C_SUCCESS,
                                         hover_color="#16a34a", font=("Segoe UI", 12, "bold"),
                                         command=self._start_export)
         self.start_btn.pack(side="left", fill="x", expand=True, padx=(0, 4))
         
-        ctk.CTkButton(bf, text="⏹ 中断", width=80, height=38, corner_radius=10,
+        ctk.CTkButton(bf, text="⏹ 中断", width=70, height=36, corner_radius=8,
                       fg_color=C_DANGER, hover_color="#dc2626",
                       font=("Segoe UI", 12, "bold"), command=self._stop).pack(side="right")
 
         # 日志
         card3 = self._card(tab)
-        card3.pack(fill="both", expand=True, padx=4, pady=(4, 4))
+        card3.pack(fill="both", expand=True, padx=4, pady=(2, 2))
         
-        ctk.CTkLabel(card3, text="运行日志", font=("Segoe UI", 11, "bold"),
-                     text_color=C_MUTED, anchor="w").pack(fill="x")
-        
-        self.log = ctk.CTkTextbox(card3, height=80, corner_radius=8, font=("Consolas", 10),
+        self.log = ctk.CTkTextbox(card3, height=60, corner_radius=6, font=("Consolas", 10),
                                    fg_color=C_LOG_BG, text_color=C_TEXT, border_width=1,
                                    border_color=C_BORDER, state="disabled",
                                    wrap="word")
-        self.log.pack(fill="both", expand=True, pady=(4, 0))
+        self.log.pack(fill="both", expand=True, padx=4, pady=4)
         
         # 重定向 stdout
         sys.stdout = self._LogWriter(self.log)
@@ -268,20 +291,20 @@ class App(ctk.CTk):
         card.pack(fill="x", padx=4, pady=(4, 8))
         
         ctk.CTkLabel(card, text="剪映草稿路径", font=("Segoe UI", 12, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x")
+                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(8,0))
         
         row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", pady=(6, 0))
+        row.pack(fill="x", padx=8, pady=(6, 8))
         self.draft_dir = ctk.CTkEntry(row, placeholder_text="选择草稿目录...",
-                                       corner_radius=8, border_color=C_BORDER)
+                                       corner_radius=6, border_color=C_BORDER)
         self.draft_dir.insert(0, r"D:\JianyingPro Drafts")
         self.draft_dir.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        ctk.CTkButton(row, text="...", width=36, height=32, corner_radius=8,
+        ctk.CTkButton(row, text="...", width=32, height=28, corner_radius=6,
                       fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
                       command=self._browse_dir).pack(side="right")
 
-        ctk.CTkButton(tab, text="📥  提取字幕 & 删除轨道 → 桌面/srt", height=42,
-                      corner_radius=10, fg_color=C_WARN, hover_color="#d97706",
+        ctk.CTkButton(tab, text="📥  提取字幕 & 删除轨道 → 桌面/srt", height=40,
+                      corner_radius=8, fg_color=C_WARN, hover_color="#d97706",
                       font=("Segoe UI", 12, "bold"), text_color="#ffffff",
                       command=self._sub_thread).pack(fill="x", padx=4, pady=10)
         
@@ -292,7 +315,7 @@ class App(ctk.CTk):
                    "设置文本轨道 flag=2 实现无字幕版",
                    "按集数命名保存到 桌面/srt 文件夹"]:
             ctk.CTkLabel(info_card, text=f"·  {t}", font=("Segoe UI", 11),
-                         text_color=C_MUTED, anchor="w").pack(fill="x", pady=1)
+                         text_color=C_MUTED, anchor="w").pack(fill="x", padx=8, pady=2)
 
     def _browse_dir(self):
         d = filedialog.askdirectory(initialdir=self.draft_dir.get())
@@ -307,8 +330,8 @@ class App(ctk.CTk):
         card1.pack(fill="x", padx=4, pady=(4, 6))
         
         row = ctk.CTkFrame(card1, fg_color="transparent")
-        row.pack(fill="x")
-        ctk.CTkButton(row, text="📁 选择文件", width=100, height=30, corner_radius=8,
+        row.pack(fill="x", padx=8, pady=8)
+        ctk.CTkButton(row, text="📁 选择文件", width=90, height=28, corner_radius=6,
                       fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
                       command=self._sel_vids).pack(side="left")
         self.file_lbl = ctk.CTkLabel(row, text="未选择", font=("Segoe UI", 11),
@@ -318,27 +341,26 @@ class App(ctk.CTk):
         card2 = self._card(tab)
         card2.pack(fill="x", padx=4, pady=4)
         ctk.CTkLabel(card2, text="命名格式", font=("Segoe UI", 12, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x")
+                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(8,0))
         self.fmt_entry = ctk.CTkEntry(card2, placeholder_text="例: 短剧名_第X集",
-                                       corner_radius=8, border_color=C_BORDER)
+                                       corner_radius=6, border_color=C_BORDER)
         self.fmt_entry.insert(0, "短剧名称_第X集")
-        self.fmt_entry.pack(fill="x", pady=(6, 0))
+        self.fmt_entry.pack(fill="x", padx=8, pady=(6, 8))
         
-        ctk.CTkButton(tab, text="✨  AI 预览重命名", height=36, corner_radius=10,
+        ctk.CTkButton(tab, text="✨  AI 预览重命名", height=34, corner_radius=8,
                       fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
-                      font=("Segoe UI", 12), command=self._ren_preview_thread
+                      font=("Segoe UI", 11, "bold"), command=self._ren_preview_thread
                       ).pack(fill="x", padx=4, pady=6)
         
-        # 预览表格
         style = ttk.Style()
         style.configure("R.Treeview", background=C_CARD, foreground=C_TEXT,
                          fieldbackground=C_CARD, borderwidth=0, font=("Segoe UI", 10),
-                         rowheight=26)
+                         rowheight=24)
         style.configure("R.Treeview.Heading", background=C_BG, foreground=C_MUTED,
                          font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat")
         
         cols = ("old", "new")
-        self.ren_tree = ttk.Treeview(tab, columns=cols, show="headings", height=5,
+        self.ren_tree = ttk.Treeview(tab, columns=cols, show="headings", height=4,
                                       style="R.Treeview")
         self.ren_tree.heading("old", text="原文件名")
         self.ren_tree.heading("new", text="新文件名")
@@ -346,7 +368,7 @@ class App(ctk.CTk):
         self.ren_tree.column("new", width=190)
         self.ren_tree.pack(fill="both", expand=True, padx=4, pady=2)
         
-        self.ren_btn = ctk.CTkButton(tab, text="✅  执行重命名", height=38, corner_radius=10,
+        self.ren_btn = ctk.CTkButton(tab, text="✅  执行重命名", height=36, corner_radius=8,
                                       fg_color=C_SUCCESS, hover_color="#16a34a",
                                       font=("Segoe UI", 12, "bold"), state="disabled",
                                       command=self._exec_rename)
@@ -368,25 +390,24 @@ class App(ctk.CTk):
         card.pack(fill="x", padx=4, pady=(4, 8))
         
         ctk.CTkLabel(card, text="Gemini API Key", font=("Segoe UI", 13, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x")
+                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(8,0))
         ctk.CTkLabel(card, text="默认为作者公用 Key，有速率限制\n建议到 aistudio.google.com 免费申请",
                      font=("Segoe UI", 11), text_color=C_WARN, anchor="w",
-                     justify="left").pack(fill="x", pady=(4, 8))
+                     justify="left").pack(fill="x", padx=8, pady=(4, 8))
         
-        self.key_entry = ctk.CTkEntry(card, show="•", corner_radius=8,
-                                       border_color=C_BORDER, height=36)
+        self.key_entry = ctk.CTkEntry(card, show="•", corner_radius=6,
+                                       border_color=C_BORDER, height=32)
         self.key_entry.insert(0, self.api_key)
-        self.key_entry.pack(fill="x", pady=(0, 8))
+        self.key_entry.pack(fill="x", padx=8, pady=(0, 8))
         
-        ctk.CTkButton(card, text="保存设置", height=34, corner_radius=8,
+        ctk.CTkButton(card, text="保存设置", height=32, corner_radius=6,
                       fg_color=C_PRIMARY, font=("Segoe UI", 11),
-                      command=lambda: (self._save_cfg(),
-                                        messagebox.showinfo("✓", "已保存"))
-                      ).pack(anchor="e")
+                      command=lambda: (self._save_cfg(), self._show_toast("✓", "设置已保存", C_SUCCESS))
+                      ).pack(anchor="e", padx=8, pady=(0,8))
 
     # ═══════════════════════ 辅助组件 ═══════════════════════
     def _card(self, parent):
-        return ctk.CTkFrame(parent, fg_color=C_CARD, corner_radius=12,
+        return ctk.CTkFrame(parent, fg_color=C_CARD, corner_radius=8,
                             border_width=1, border_color=C_BORDER)
 
     class _LogWriter:
@@ -528,20 +549,22 @@ class App(ctk.CTk):
 
     def _start_export(self):
         if None in self.coords.values():
-            messagebox.showerror("提示", "请先完成坐标录制"); return
+            self._show_toast("未就绪", "请先完成坐标录制", C_WARN); return
         if not self.drafts:
-            messagebox.showerror("提示", "请先 AI 扫描首页"); return
+            self._show_toast("未就绪", "请先 AI 扫描首页", C_WARN); return
         sel = self.queue.selection()
         if not sel:
-            messagebox.showwarning("提示", "请在队列中选中一行作为起始点"); return
+            self._show_toast("提示", "请在队列中选中一行作为起始点", C_WARN); return
         
         idx = int(sel[0])
         nm = self.drafts[idx][2]
         n = len(self.drafts) - idx
-        if not messagebox.askyesno("确认开始",
-                f"从【{nm}】(第{idx+1}个) 开始\n共 {n} 个待导出，确认？"): return
         
-        self.stop_flag = False; self.start_btn.configure(state="disabled")
+        self._ask_yes_no("确认开始", f"将从【{nm}】(第{idx+1}个) 开始\n共 {n} 个待导出，确认？", lambda: self._start_export_thread(idx))
+
+    def _start_export_thread(self, idx):
+        self.stop_flag = False
+        self.start_btn.configure(state="disabled")
         threading.Thread(target=self._export_loop, args=(idx,), daemon=True).start()
 
     def _chk(self):
@@ -595,8 +618,7 @@ class App(ctk.CTk):
 
     # ═══════════════════════ 字幕提取 ═══════════════════════
     def _sub_thread(self):
-        if not messagebox.askyesno("确认", "草稿全部来自云空间且未打开过？"): return
-        threading.Thread(target=self._extract_subs, daemon=True).start()
+        self._ask_yes_no("安全确认", "草稿是否全部来自云空间\n且未双击打开过？", lambda: threading.Thread(target=self._extract_subs, daemon=True).start())
 
     def _extract_subs(self):
         self._log("提取字幕...")
@@ -653,10 +675,11 @@ class App(ctk.CTk):
                     ok += 1; cnt += 1
             except Exception as e: self._log(f"  ✗ {d['fn']}: {e}")
         self._log(f"完成，提取 {ok} 个")
+        self._show_toast("提取完成", f"共提取 {ok} 个字幕至桌面/srt", C_SUCCESS)
 
     # ═══════════════════════ 重命名 ═══════════════════════
     def _ren_preview_thread(self):
-        if not self.sel_files: messagebox.showwarning("提示", "请先选择文件"); return
+        if not self.sel_files: self._show_toast("提示", "请先选择视频文件", C_WARN); return
         threading.Thread(target=self._ren_preview, daemon=True).start()
 
     def _ren_preview(self):
@@ -691,19 +714,16 @@ class App(ctk.CTk):
 
     def _exec_rename(self):
         if not self.rename_map: return
-        ok = sum(1 for o, n in self.rename_map if not (lambda: (os.rename(o, n), True)[-1] if True else False)() is None)
-        # simpler:
         ok = 0
         for o, n in self.rename_map:
             try: os.rename(o, n); ok += 1
             except: pass
-        messagebox.showinfo("完成", f"成功 {ok}/{len(self.rename_map)}")
+        self._show_toast("重命名完成", f"成功修改 {ok}/{len(self.rename_map)} 个文件", C_SUCCESS)
         self.sel_files = []; self.file_lbl.configure(text="未选择")
         for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
         self.ren_btn.configure(state="disabled")
 
 # ─── 启动 ──────────────────────────────────────────────────
 if __name__ == "__main__":
-    check_auth()
     app = App()
     app.mainloop()
