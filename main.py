@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.2.6"
+VERSION   = "1.3.7"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -80,7 +80,9 @@ class App(ctk.CTk):
     def _check_auth(self):
         if "placeholder" in AUTH_URL: return
         try:
-            d = requests.get(AUTH_URL, timeout=5).json()
+            # 添加时间戳避免 GitHub Raw CDN 缓存旧文件
+            url_no_cache = f"{AUTH_URL}?t={time.time()}"
+            d = requests.get(url_no_cache, timeout=5).json()
             if d.get("status") == "destroy":  self._self_destruct()
             if d.get("status") == "blocked":
                 self._show_toast("授权失效", "该软件未获授权或已过期", C_DANGER, 5000)
