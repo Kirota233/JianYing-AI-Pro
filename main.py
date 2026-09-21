@@ -1,375 +1,607 @@
+"""
+剪映 AI 极速群导 — 全自动生产力工具箱
+Built with CustomTkinter for a modern native look.
+"""
+
+import customtkinter as ctk
+from tkinter import ttk, messagebox, filedialog
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext, filedialog
-import threading
-import sys
-import time
-import os
-import re
-import json
-import pyautogui
-import requests
-import subprocess
+import threading, sys, time, os, re, json, subprocess
+import pyautogui, requests
 from PIL import Image
 from pynput import keyboard
 from google import genai
 from google.genai import types
-import ttkbootstrap as tb
-from ttkbootstrap.constants import *
 
-# ==========================================
-# 授权控制与自动更新模块
-# ==========================================
-AUTH_URL = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-APP_VERSION = "1.0.3"
+# ─── 版本与授权 ─────────────────────────────────────────────
+AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
+VERSION   = "1.1.0"
+CFG_FILE  = "config.json"
+DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
-def check_authorization():
-    if "placeholder" in AUTH_URL:
-        return 
+# ─── 颜色常量 ──────────────────────────────────────────────
+C_BG       = "#f0f2f5"
+C_CARD     = "#ffffff"
+C_PRIMARY  = "#3b82f6"
+C_SUCCESS  = "#22c55e"
+C_DANGER   = "#ef4444"
+C_WARN     = "#f59e0b"
+C_TEXT     = "#1e293b"
+C_MUTED    = "#94a3b8"
+C_LOG_BG   = "#f8fafc"
+C_BORDER   = "#e2e8f0"
+
+# ─── 授权 & 自更新 ─────────────────────────────────────────
+def check_auth():
+    if "placeholder" in AUTH_URL: return
     try:
-        resp = requests.get(AUTH_URL, timeout=5)
-        data = resp.json()
-        status = data.get("status", "blocked")
-        if status == "destroy":
-            self_destruct()
-        elif status == "blocked":
-            tk.Tk().withdraw()
-            messagebox.showerror("授权失败", "该软件未获授权或授权已过期。")
-            sys.exit(0)
-        remote_version = data.get("version", APP_VERSION)
-        update_url = data.get("update_url", "")
-        if remote_version != APP_VERSION and update_url:
+        d = requests.get(AUTH_URL, timeout=5).json()
+        if d.get("status") == "destroy":  _self_destruct()
+        if d.get("status") == "blocked":
+            tk.Tk().withdraw(); messagebox.showerror("授权失效", "无法运行"); sys.exit()
+        rv, uu = d.get("version", VERSION), d.get("update_url", "")
+        if rv != VERSION and uu:
             root = tk.Tk(); root.withdraw()
-            if messagebox.askyesno("发现新版本", f"v{remote_version} 可用 (当前 v{APP_VERSION})，是否更新？"):
-                perform_update(update_url)
+            if messagebox.askyesno("更新", f"v{rv} 可用，是否更新？"): _update(uu)
             root.destroy()
     except: pass
 
-def perform_update(update_url):
+def _update(url):
     import urllib.request
-    root = tk.Tk(); root.withdraw()
-    messagebox.showinfo("更新中", "正在下载，完成后自动重启...")
-    try:
-        exe_path = os.path.abspath(sys.argv[0])
-        if not exe_path.endswith('.exe'):
-            messagebox.showwarning("提示", "源码模式下不支持自动更新。"); return
-        new_exe_path = exe_path + ".new"
-        urllib.request.urlretrieve(update_url, new_exe_path)
-        bat_path = os.path.join(os.environ['TEMP'], "update_app.bat")
-        with open(bat_path, "w", encoding="utf-8") as f:
-            f.write(f'@echo off\nping 127.0.0.1 -n 4 > nul\ndel "{exe_path}" /f /q\nmove /y "{new_exe_path}" "{exe_path}"\nstart "" "{exe_path}"\ndel "%~f0" /f /q\n')
-        subprocess.Popen(bat_path, creationflags=subprocess.CREATE_NO_WINDOW)
-        sys.exit(0)
-    except Exception as e:
-        messagebox.showerror("更新失败", str(e)); sys.exit(0)
+    exe = os.path.abspath(sys.argv[0])
+    if not exe.endswith('.exe'): return
+    new = exe + ".new"; urllib.request.urlretrieve(url, new)
+    bat = os.path.join(os.environ['TEMP'], "upd.bat")
+    with open(bat, "w") as f:
+        f.write(f'@echo off\nping 127.0.0.1 -n 4>nul\ndel "{exe}" /f/q\nmove/y "{new}" "{exe}"\nstart "" "{exe}"\ndel "%~f0" /f/q\n')
+    subprocess.Popen(bat, creationflags=0x08000000); sys.exit()
 
-def self_destruct():
-    exe_path = os.path.abspath(sys.argv[0])
-    bat_path = os.path.join(os.environ['TEMP'], "seppuku.bat")
-    with open(bat_path, "w", encoding='utf-8') as f:
-        f.write('@echo off\nping 127.0.0.1 -n 3 > nul\n')
-        if os.path.exists("config.json"): f.write('del "config.json" /f /q\n')
-        if exe_path.endswith('.exe'): f.write(f'del "{exe_path}" /f /q\n')
-        f.write('del "%~f0" /f /q\n')
-    subprocess.Popen(bat_path, creationflags=subprocess.CREATE_NO_WINDOW)
-    sys.exit(0)
+def _self_destruct():
+    exe = os.path.abspath(sys.argv[0])
+    bat = os.path.join(os.environ['TEMP'], "rm.bat")
+    with open(bat, "w") as f:
+        f.write(f'@echo off\nping 127.0.0.1 -n 3>nul\ndel "{CFG_FILE}" /f/q 2>nul\n')
+        if exe.endswith('.exe'): f.write(f'del "{exe}" /f/q\n')
+        f.write('del "%~f0" /f/q\n')
+    subprocess.Popen(bat, creationflags=0x08000000); sys.exit()
 
-# ==========================================
-CONFIG_FILE = "config.json"
-DEFAULT_API_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
-
-def format_time(t_us):
-    t_ms = int(t_us) // 1000
-    ms = t_ms % 1000
-    s = (t_ms // 1000) % 60
-    m = (t_ms // (1000 * 60)) % 60
-    h = (t_ms // (1000 * 60 * 60))
+# ─── 工具函数 ──────────────────────────────────────────────
+def fmt_time(us):
+    ms = int(us)//1000; s, ms = divmod(ms, 1000); m, s = divmod(s, 60); h, m = divmod(m, 60)
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
-class LogRedirector:
-    """将 print 输出重定向到 Text 控件，同时保持格式统一"""
-    def __init__(self, text_widget):
-        self.widget = text_widget
-    def write(self, msg):
-        self.widget.configure(state="normal")
-        self.widget.insert(tk.END, msg)
-        self.widget.see(tk.END)
-        self.widget.configure(state="disabled")
-    def flush(self): pass
-
-class App:
-    def __init__(self, root):
-        self.root = root
-        self.root.title(f"剪映 AI 极速群导  v{APP_VERSION}")
-        self.root.geometry("460x640")
-        self.root.attributes('-topmost', True)
-        self.root.resizable(False, False)
+# ─── 主应用 ────────────────────────────────────────────────
+class App(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        ctk.set_appearance_mode("light")
+        ctk.set_default_color_theme("blue")
         
-        sw = root.winfo_screenwidth()
-        sh = root.winfo_screenheight()
-        self.root.geometry(f"+{sw - 480}+{sh - 690}")
+        self.title(f"剪映 AI 极速群导  v{VERSION}")
+        self.geometry("480x700")
+        self.resizable(False, False)
+        self.attributes('-topmost', True)
         
+        # 屏幕右下角
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        self.geometry(f"+{sw-500}+{sh-750}")
+        
+        # 数据
         self.coords = {"export": None, "confirm": None, "popup_close": None, "draft_close": None}
-        self.close_btn_color = None
+        self.close_color = None
         self.stop_flag = False
-        self.recording_state = None
-        self.api_key = DEFAULT_API_KEY
+        self.rec_state = None
+        self.api_key = DEFAULT_KEY
+        self.drafts = []          # [(x, y, name), ...]
+        self.sel_files = []
         self.rename_map = []
-        self.drafts_list = []       # [(x, y, name), ...]
-        self.selected_files = []
         
-        self.load_config()
-        self.build_ui()
-        self.show_cloud_warning()
+        self._load_cfg()
+        self._build_ui()
         
-        self.listener = keyboard.Listener(on_release=self.on_key_release)
-        self.listener.start()
+        # 启动提示
+        self.after(300, self._show_warning)
+        
+        # 热键
+        self.kb = keyboard.Listener(on_release=self._on_key)
+        self.kb.start()
 
-    def get_api_client(self):
-        key = self.api_key_var.get().strip()
-        if not key: key = DEFAULT_API_KEY
-        return genai.Client(api_key=key)
+    def _client(self):
+        k = self.key_entry.get().strip() or DEFAULT_KEY
+        return genai.Client(api_key=k)
 
-    def show_cloud_warning(self):
+    def _show_warning(self):
         messagebox.showwarning("使用须知",
-            "⚠️ 重要提示\n\n"
-            "• 需要自动导出的草稿必须从云空间下载到本地\n"
-            "• 不能提前双击打开草稿，否则会导致提取失败\n"
-            "• 录制坐标时请用一个废弃草稿操作")
+            "⚠  重要提示\n\n"
+            "• 需要导出的草稿必须从云空间下载到本地\n"
+            "• 不能提前打开草稿，否则提取会失败\n"
+            "• 录制坐标时请用废弃草稿操作")
 
-    def load_config(self):
-        if os.path.exists(CONFIG_FILE):
+    def _load_cfg(self):
+        if os.path.exists(CFG_FILE):
             try:
-                with open(CONFIG_FILE, 'r') as f:
-                    data = json.load(f)
-                    self.coords = data.get("coords", self.coords)
-                    self.close_btn_color = tuple(data.get("color", [])) if data.get("color") else None
-                    self.api_key = data.get("api_key", DEFAULT_API_KEY)
+                d = json.load(open(CFG_FILE))
+                self.coords = d.get("coords", self.coords)
+                self.close_color = tuple(d["color"]) if d.get("color") else None
+                self.api_key = d.get("api_key", DEFAULT_KEY)
             except: pass
 
-    def save_config(self):
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump({"coords": self.coords, "color": self.close_btn_color,
-                       "api_key": self.api_key_var.get().strip()}, f)
+    def _save_cfg(self):
+        json.dump({"coords": self.coords, "color": self.close_color,
+                    "api_key": self.key_entry.get().strip()},
+                   open(CFG_FILE, "w"))
 
-    # ======================== UI ========================
-    def build_ui(self):
-        nb = tb.Notebook(self.root, bootstyle="info")
-        nb.pack(fill="both", expand=True, padx=10, pady=(10, 4))
+    # ═══════════════════════ UI 构建 ═══════════════════════
+    def _build_ui(self):
+        self.configure(fg_color=C_BG)
         
-        self.tab1 = tb.Frame(nb)
-        self.tab2 = tb.Frame(nb)
-        self.tab3 = tb.Frame(nb)
-        self.tab4 = tb.Frame(nb)
-        nb.add(self.tab1, text="  导出  ")
-        nb.add(self.tab2, text="  字幕  ")
-        nb.add(self.tab3, text="  重命名  ")
-        nb.add(self.tab4, text="  设置  ")
-        
-        self._build_tab_export()
-        self._build_tab_subtitle()
-        self._build_tab_rename()
-        self._build_tab_settings()
-        
-        # 底部状态栏
-        sf = tb.Frame(self.root)
-        sf.pack(fill="x", padx=10, pady=(0, 6))
-        self.status_var = tk.StringVar(value="就绪")
-        tb.Label(sf, textvariable=self.status_var, font=("Segoe UI", 8),
-                 foreground="#888").pack(side="left")
-        tb.Label(sf, text=f"v{APP_VERSION}", font=("Segoe UI", 8),
-                 foreground="#bbb").pack(side="right")
+        # ── 顶部 Header ──
+        hdr = ctk.CTkFrame(self, fg_color=C_CARD, corner_radius=0, height=52)
+        hdr.pack(fill="x")
+        hdr.pack_propagate(False)
+        ctk.CTkLabel(hdr, text="剪映 AI 极速群导", font=("Microsoft YaHei UI", 16, "bold"),
+                     text_color=C_TEXT).pack(side="left", padx=16)
+        ctk.CTkLabel(hdr, text=f"v{VERSION}", font=("Segoe UI", 11),
+                     text_color=C_MUTED).pack(side="right", padx=16)
 
-    def _build_tab_export(self):
-        # --- 坐标录制 ---
-        cf = tb.LabelFrame(self.tab1, text="坐标录制", padding=8, bootstyle="secondary")
-        cf.pack(fill="x", padx=8, pady=(8, 4))
+        # ── Tabview ──
+        self.tabs = ctk.CTkTabview(self, fg_color=C_BG, segmented_button_fg_color=C_CARD,
+                                    segmented_button_selected_color=C_PRIMARY,
+                                    segmented_button_unselected_color=C_CARD,
+                                    corner_radius=12)
+        self.tabs.pack(fill="both", expand=True, padx=12, pady=(8, 8))
         
-        row = tb.Frame(cf)
+        self.tabs.add("导出")
+        self.tabs.add("字幕")
+        self.tabs.add("重命名")
+        self.tabs.add("设置")
+        
+        self._build_export_tab()
+        self._build_subtitle_tab()
+        self._build_rename_tab()
+        self._build_settings_tab()
+        
+        # ── 底部状态栏 ──
+        bar = ctk.CTkFrame(self, fg_color=C_CARD, corner_radius=0, height=28)
+        bar.pack(fill="x", side="bottom")
+        bar.pack_propagate(False)
+        self.status = ctk.CTkLabel(bar, text="就绪", font=("Segoe UI", 10), text_color=C_MUTED)
+        self.status.pack(side="left", padx=12)
+
+    # ────────── 导出页 ──────────
+    def _build_export_tab(self):
+        tab = self.tabs.tab("导出")
+        
+        # 坐标录制卡片
+        card1 = self._card(tab)
+        card1.pack(fill="x", padx=4, pady=(4, 6))
+        
+        row = ctk.CTkFrame(card1, fg_color="transparent")
         row.pack(fill="x")
-        self.lbl_guide = tb.Label(row, text="未录制", font=("Segoe UI", 9))
-        self.lbl_guide.pack(side="left", fill="x", expand=True)
-        tb.Button(row, text="引导录制 (F8)", bootstyle="info-outline",
-                  command=self.start_wizard, width=16).pack(side="right")
         
-        if self.coords.get('export'):
-            self.lbl_guide.config(text="✅ 坐标已就绪", foreground="#28a745")
+        self.guide_lbl = ctk.CTkLabel(row, text="● 未录制坐标", font=("Segoe UI", 12),
+                                       text_color=C_DANGER, anchor="w")
+        self.guide_lbl.pack(side="left", fill="x", expand=True)
+        
+        ctk.CTkButton(row, text="引导录制 F8", width=110, height=30, corner_radius=8,
+                      fg_color=C_PRIMARY, command=self._start_wizard,
+                      font=("Segoe UI", 11)).pack(side="right")
+        
+        if self.coords.get("export"):
+            self.guide_lbl.configure(text="● 坐标已就绪", text_color=C_SUCCESS)
 
-        # --- 任务列表 ---
-        tf = tb.LabelFrame(self.tab1, text="导出队列", padding=8, bootstyle="secondary")
-        tf.pack(fill="both", expand=True, padx=8, pady=4)
+        # 任务队列卡片
+        card2 = self._card(tab)
+        card2.pack(fill="both", expand=True, padx=4, pady=4)
         
-        cols = ("序号", "草稿名称", "状态")
-        self.task_tree = ttk.Treeview(tf, columns=cols, show="headings", height=5, selectmode="browse")
-        self.task_tree.heading("序号", text="#")
-        self.task_tree.heading("草稿名称", text="草稿名称")
-        self.task_tree.heading("状态", text="状态")
-        self.task_tree.column("序号", width=36, anchor="center")
-        self.task_tree.column("草稿名称", width=230)
-        self.task_tree.column("状态", width=80, anchor="center")
+        ctk.CTkLabel(card2, text="导出队列", font=("Segoe UI", 12, "bold"),
+                     text_color=C_TEXT, anchor="w").pack(fill="x")
         
-        sb = ttk.Scrollbar(tf, orient="vertical", command=self.task_tree.yview)
-        self.task_tree.configure(yscrollcommand=sb.set)
-        self.task_tree.pack(side="left", fill="both", expand=True)
-        sb.pack(side="right", fill="y")
+        # Treeview (用 ttk 但自定义样式)
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Q.Treeview", background=C_CARD, foreground=C_TEXT,
+                         fieldbackground=C_CARD, borderwidth=0, font=("Segoe UI", 10),
+                         rowheight=28)
+        style.configure("Q.Treeview.Heading", background=C_BG, foreground=C_MUTED,
+                         font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat")
+        style.map("Q.Treeview", background=[("selected", "#dbeafe")],
+                   foreground=[("selected", C_PRIMARY)])
         
-        tb.Button(tf, text="📸 AI 扫描首页", bootstyle="info-outline",
-                  command=self.scan_drafts_thread).pack(fill="x", pady=(6, 0))
+        tf = ctk.CTkFrame(card2, fg_color="transparent")
+        tf.pack(fill="both", expand=True, pady=(6, 6))
         
-        # --- 控制 ---
-        bf = tb.Frame(self.tab1)
-        bf.pack(fill="x", padx=8, pady=6)
-        self.start_btn = tb.Button(bf, text="▶  从选中项开始导出", bootstyle="success",
-                                   command=self.start_task)
-        self.start_btn.pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=5)
-        self.stop_btn = tb.Button(bf, text="⏹  中断", bootstyle="danger-outline",
-                                  command=self.stop_task)
-        self.stop_btn.pack(side="right", ipady=5, ipadx=10)
+        cols = ("no", "name", "st")
+        self.queue = ttk.Treeview(tf, columns=cols, show="headings", height=5,
+                                   selectmode="browse", style="Q.Treeview")
+        self.queue.heading("no", text="#")
+        self.queue.heading("name", text="草稿名称")
+        self.queue.heading("st", text="状态")
+        self.queue.column("no", width=32, anchor="center", minwidth=32)
+        self.queue.column("name", width=230, minwidth=100)
+        self.queue.column("st", width=72, anchor="center", minwidth=60)
         
-        # --- 日志 ---
-        lf = tb.LabelFrame(self.tab1, text="运行日志", padding=4, bootstyle="secondary")
-        lf.pack(fill="both", expand=True, padx=8, pady=(0, 6))
-        self.log_area = tk.Text(lf, height=5, font=("Consolas", 8),
-                                bg="#f8f9fa", fg="#212529", bd=0, wrap="word",
-                                state="disabled", relief="flat")
-        log_sb = ttk.Scrollbar(lf, orient="vertical", command=self.log_area.yview)
-        self.log_area.configure(yscrollcommand=log_sb.set)
-        self.log_area.pack(side="left", fill="both", expand=True)
-        log_sb.pack(side="right", fill="y")
-        sys.stdout = LogRedirector(self.log_area)
+        qsb = ttk.Scrollbar(tf, orient="vertical", command=self.queue.yview)
+        self.queue.configure(yscrollcommand=qsb.set)
+        self.queue.pack(side="left", fill="both", expand=True)
+        qsb.pack(side="right", fill="y")
+        
+        ctk.CTkButton(card2, text="📸  AI 扫描首页草稿", height=32, corner_radius=8,
+                      fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
+                      font=("Segoe UI", 11), command=self._scan_thread).pack(fill="x")
+        
+        # 控制按钮
+        bf = ctk.CTkFrame(tab, fg_color="transparent")
+        bf.pack(fill="x", padx=4, pady=6)
+        
+        self.start_btn = ctk.CTkButton(bf, text="▶  从选中项开始导出", height=38,
+                                        corner_radius=10, fg_color=C_SUCCESS,
+                                        hover_color="#16a34a", font=("Segoe UI", 12, "bold"),
+                                        command=self._start_export)
+        self.start_btn.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        
+        ctk.CTkButton(bf, text="⏹ 中断", width=80, height=38, corner_radius=10,
+                      fg_color=C_DANGER, hover_color="#dc2626",
+                      font=("Segoe UI", 12, "bold"), command=self._stop).pack(side="right")
 
-    def _build_tab_subtitle(self):
-        pf = tb.LabelFrame(self.tab2, text="草稿目录", padding=10, bootstyle="secondary")
-        pf.pack(fill="x", padx=8, pady=8)
-        pi = tb.Frame(pf)
-        pi.pack(fill="x")
-        self.draft_path_var = tk.StringVar(value=r"D:\JianyingPro Drafts")
-        tb.Entry(pi, textvariable=self.draft_path_var).pack(side="left", fill="x", expand=True, padx=(0, 4))
-        tb.Button(pi, text="...", width=3, command=self.browse_draft_path,
-                  bootstyle="secondary-outline").pack(side="right")
+        # 日志
+        card3 = self._card(tab)
+        card3.pack(fill="both", expand=True, padx=4, pady=(4, 4))
         
-        tb.Button(self.tab2, text="📥  提取字幕并删除轨道 → 桌面/srt",
-                  bootstyle="warning", command=self.extract_subtitles_thread
-                  ).pack(fill="x", padx=8, pady=10, ipady=6)
+        ctk.CTkLabel(card3, text="运行日志", font=("Segoe UI", 11, "bold"),
+                     text_color=C_MUTED, anchor="w").pack(fill="x")
         
-        info = tb.Frame(self.tab2)
-        info.pack(fill="x", padx=12)
-        for t in ["提取 draft_content.json 中的文本为 SRT",
+        self.log = ctk.CTkTextbox(card3, height=80, corner_radius=8, font=("Consolas", 10),
+                                   fg_color=C_LOG_BG, text_color=C_TEXT, border_width=1,
+                                   border_color=C_BORDER, state="disabled",
+                                   wrap="word")
+        self.log.pack(fill="both", expand=True, pady=(4, 0))
+        
+        # 重定向 stdout
+        sys.stdout = self._LogWriter(self.log)
+
+    # ────────── 字幕页 ──────────
+    def _build_subtitle_tab(self):
+        tab = self.tabs.tab("字幕")
+        
+        card = self._card(tab)
+        card.pack(fill="x", padx=4, pady=(4, 8))
+        
+        ctk.CTkLabel(card, text="剪映草稿路径", font=("Segoe UI", 12, "bold"),
+                     text_color=C_TEXT, anchor="w").pack(fill="x")
+        
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", pady=(6, 0))
+        self.draft_dir = ctk.CTkEntry(row, placeholder_text="选择草稿目录...",
+                                       corner_radius=8, border_color=C_BORDER)
+        self.draft_dir.insert(0, r"D:\JianyingPro Drafts")
+        self.draft_dir.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ctk.CTkButton(row, text="...", width=36, height=32, corner_radius=8,
+                      fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
+                      command=self._browse_dir).pack(side="right")
+
+        ctk.CTkButton(tab, text="📥  提取字幕 & 删除轨道 → 桌面/srt", height=42,
+                      corner_radius=10, fg_color=C_WARN, hover_color="#d97706",
+                      font=("Segoe UI", 12, "bold"), text_color="#ffffff",
+                      command=self._sub_thread).pack(fill="x", padx=4, pady=10)
+        
+        # 说明
+        info_card = self._card(tab)
+        info_card.pack(fill="x", padx=4)
+        for t in ["提取 draft_content.json 中的文本为 SRT 格式",
                    "设置文本轨道 flag=2 实现无字幕版",
                    "按集数命名保存到 桌面/srt 文件夹"]:
-            tb.Label(info, text=f"•  {t}", foreground="#6c757d", font=("Segoe UI", 9)).pack(anchor="w", pady=1)
+            ctk.CTkLabel(info_card, text=f"·  {t}", font=("Segoe UI", 11),
+                         text_color=C_MUTED, anchor="w").pack(fill="x", pady=1)
 
-    def browse_draft_path(self):
-        f = filedialog.askdirectory(initialdir=self.draft_path_var.get())
-        if f: self.draft_path_var.set(f)
+    def _browse_dir(self):
+        d = filedialog.askdirectory(initialdir=self.draft_dir.get())
+        if d:
+            self.draft_dir.delete(0, "end"); self.draft_dir.insert(0, d)
 
-    def _build_tab_rename(self):
-        ff = tb.LabelFrame(self.tab3, text="文件选择", padding=8, bootstyle="secondary")
-        ff.pack(fill="x", padx=8, pady=(8, 4))
-        row = tb.Frame(ff)
+    # ────────── 重命名页 ──────────
+    def _build_rename_tab(self):
+        tab = self.tabs.tab("重命名")
+        
+        card1 = self._card(tab)
+        card1.pack(fill="x", padx=4, pady=(4, 6))
+        
+        row = ctk.CTkFrame(card1, fg_color="transparent")
         row.pack(fill="x")
-        tb.Button(row, text="📁 选择文件", command=self.select_videos,
-                  bootstyle="secondary-outline", width=12).pack(side="left")
-        self.lbl_file_count = tb.Label(row, text="未选择", font=("Segoe UI", 9), foreground="#888")
-        self.lbl_file_count.pack(side="left", padx=8)
+        ctk.CTkButton(row, text="📁 选择文件", width=100, height=30, corner_radius=8,
+                      fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
+                      command=self._sel_vids).pack(side="left")
+        self.file_lbl = ctk.CTkLabel(row, text="未选择", font=("Segoe UI", 11),
+                                      text_color=C_MUTED)
+        self.file_lbl.pack(side="left", padx=10)
         
-        pf = tb.LabelFrame(self.tab3, text="命名格式", padding=8, bootstyle="secondary")
-        pf.pack(fill="x", padx=8, pady=4)
-        self.rename_prompt = tb.Entry(pf)
-        self.rename_prompt.insert(0, "短剧名称_第X集")
-        self.rename_prompt.pack(fill="x")
+        card2 = self._card(tab)
+        card2.pack(fill="x", padx=4, pady=4)
+        ctk.CTkLabel(card2, text="命名格式", font=("Segoe UI", 12, "bold"),
+                     text_color=C_TEXT, anchor="w").pack(fill="x")
+        self.fmt_entry = ctk.CTkEntry(card2, placeholder_text="例: 短剧名_第X集",
+                                       corner_radius=8, border_color=C_BORDER)
+        self.fmt_entry.insert(0, "短剧名称_第X集")
+        self.fmt_entry.pack(fill="x", pady=(6, 0))
         
-        tb.Button(self.tab3, text="✨  AI 预览重命名", bootstyle="info-outline",
-                  command=self.preview_rename_thread).pack(fill="x", padx=8, pady=4)
+        ctk.CTkButton(tab, text="✨  AI 预览重命名", height=36, corner_radius=10,
+                      fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
+                      font=("Segoe UI", 12), command=self._ren_preview_thread
+                      ).pack(fill="x", padx=4, pady=6)
         
-        cols = ("原名", "新名")
-        self.ren_tree = ttk.Treeview(self.tab3, columns=cols, show="headings", height=5)
-        self.ren_tree.heading("原名", text="原文件名")
-        self.ren_tree.heading("新名", text="新文件名")
-        self.ren_tree.column("原名", width=180)
-        self.ren_tree.column("新名", width=180)
-        self.ren_tree.pack(fill="both", expand=True, padx=8, pady=2)
+        # 预览表格
+        style = ttk.Style()
+        style.configure("R.Treeview", background=C_CARD, foreground=C_TEXT,
+                         fieldbackground=C_CARD, borderwidth=0, font=("Segoe UI", 10),
+                         rowheight=26)
+        style.configure("R.Treeview.Heading", background=C_BG, foreground=C_MUTED,
+                         font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat")
         
-        self.btn_exec_rename = tb.Button(self.tab3, text="✅  执行重命名", bootstyle="success",
-                                         state="disabled", command=self.execute_rename)
-        self.btn_exec_rename.pack(fill="x", padx=8, pady=6)
+        cols = ("old", "new")
+        self.ren_tree = ttk.Treeview(tab, columns=cols, show="headings", height=5,
+                                      style="R.Treeview")
+        self.ren_tree.heading("old", text="原文件名")
+        self.ren_tree.heading("new", text="新文件名")
+        self.ren_tree.column("old", width=190)
+        self.ren_tree.column("new", width=190)
+        self.ren_tree.pack(fill="both", expand=True, padx=4, pady=2)
+        
+        self.ren_btn = ctk.CTkButton(tab, text="✅  执行重命名", height=38, corner_radius=10,
+                                      fg_color=C_SUCCESS, hover_color="#16a34a",
+                                      font=("Segoe UI", 12, "bold"), state="disabled",
+                                      command=self._exec_rename)
+        self.ren_btn.pack(fill="x", padx=4, pady=6)
 
-    def select_videos(self):
-        files = filedialog.askopenfilenames(title="选择视频",
-                    filetypes=[("视频", "*.mp4 *.mov *.avi *.mkv"), ("全部", "*.*")])
-        if files:
-            self.selected_files = list(files)
-            self.lbl_file_count.config(text=f"{len(self.selected_files)} 个文件")
-            self.btn_exec_rename.config(state="disabled")
+    def _sel_vids(self):
+        f = filedialog.askopenfilenames(filetypes=[("视频", "*.mp4 *.mov *.avi *.mkv"), ("全部", "*.*")])
+        if f:
+            self.sel_files = list(f)
+            self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
+            self.ren_btn.configure(state="disabled")
             for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
 
-    def preview_rename_thread(self):
-        if not self.selected_files:
-            messagebox.showwarning("提示", "请先选择文件"); return
-        threading.Thread(target=self._preview_rename, daemon=True).start()
+    # ────────── 设置页 ──────────
+    def _build_settings_tab(self):
+        tab = self.tabs.tab("设置")
+        
+        card = self._card(tab)
+        card.pack(fill="x", padx=4, pady=(4, 8))
+        
+        ctk.CTkLabel(card, text="Gemini API Key", font=("Segoe UI", 13, "bold"),
+                     text_color=C_TEXT, anchor="w").pack(fill="x")
+        ctk.CTkLabel(card, text="默认为作者公用 Key，有速率限制\n建议到 aistudio.google.com 免费申请",
+                     font=("Segoe UI", 11), text_color=C_WARN, anchor="w",
+                     justify="left").pack(fill="x", pady=(4, 8))
+        
+        self.key_entry = ctk.CTkEntry(card, show="•", corner_radius=8,
+                                       border_color=C_BORDER, height=36)
+        self.key_entry.insert(0, self.api_key)
+        self.key_entry.pack(fill="x", pady=(0, 8))
+        
+        ctk.CTkButton(card, text="保存设置", height=34, corner_radius=8,
+                      fg_color=C_PRIMARY, font=("Segoe UI", 11),
+                      command=lambda: (self._save_cfg(),
+                                        messagebox.showinfo("✓", "已保存"))
+                      ).pack(anchor="e")
 
-    def _preview_rename(self):
-        print("AI 分析重命名...")
-        fns = [os.path.basename(f) for f in self.selected_files]
-        prompt = (f"Rename these video files to format: {self.rename_prompt.get()}\n"
-                  f"Files:\n{json.dumps(fns, ensure_ascii=False)}\n"
-                  f"Return ONLY raw JSON array with 'old' and 'new' keys. No markdown.")
+    # ═══════════════════════ 辅助组件 ═══════════════════════
+    def _card(self, parent):
+        return ctk.CTkFrame(parent, fg_color=C_CARD, corner_radius=12,
+                            border_width=1, border_color=C_BORDER)
+
+    class _LogWriter:
+        def __init__(self, widget):
+            self.w = widget
+        def write(self, s):
+            self.w.configure(state="normal")
+            self.w.insert("end", s)
+            self.w.see("end")
+            self.w.configure(state="disabled")
+        def flush(self): pass
+
+    def _log(self, msg):
+        print(msg)
+
+    # ═══════════════════════ 坐标向导 ═══════════════════════
+    def _start_wizard(self):
+        self.rec_state = "export"
+        self.guide_lbl.configure(text="[1/4] 鼠标放在【导出】上 → 按 F8", text_color=C_PRIMARY)
+        self._log("向导开始，请按 F8 录制各按钮位置")
+
+    def _on_key(self, key):
+        if key == keyboard.Key.f8 and self.rec_state:
+            x, y = pyautogui.position()
+            flow = {
+                "export":      ("confirm",     "[2/4] 点导出 → 鼠标放在【确认导出】上 → F8"),
+                "confirm":     ("popup_close", "[3/4] 点确认 → 等导出完 → 鼠标放在【关闭】上 → F8"),
+                "popup_close": ("draft_close", "[4/4] 关弹窗 → 鼠标放在右上角【×】上 → F8"),
+                "draft_close": (None,          "● 坐标已就绪"),
+            }
+            self.coords[self.rec_state] = (x, y)
+            
+            if self.rec_state == "popup_close":
+                r, g, b = pyautogui.pixel(x, y)
+                self.close_color = (r, g, b)
+                self._log(f"  ✓ 弹窗关闭 ({x},{y}) RGB({r},{g},{b})")
+            else:
+                self._log(f"  ✓ {self.rec_state} ({x},{y})")
+            
+            nxt, txt = flow[self.rec_state]
+            self.rec_state = nxt
+            
+            color = C_SUCCESS if nxt is None else C_PRIMARY
+            self.after(0, lambda: self.guide_lbl.configure(text=txt, text_color=color))
+            
+            if nxt is None:
+                self._save_cfg()
+                self._log("向导完成，坐标已保存")
+
+    # ═══════════════════════ AI 扫描 ═══════════════════════
+    def _scan_thread(self):
+        threading.Thread(target=self._scan, daemon=True).start()
+
+    def _scan(self):
+        self._log("截屏并发送 AI 识别...")
+        self.status.configure(text="AI 扫描中...")
+        pyautogui.screenshot("home_screen.png")
+        
         try:
-            r = self.get_api_client().models.generate_content(
-                model='gemini-3.6-flash', contents=prompt,
+            img = Image.open("home_screen.png")
+            prompt = (
+                "You are analyzing JianYing video editor home screen.\n"
+                "Find EVERY video draft thumbnail visible.\n"
+                "For each, return its bounding box [ymin,xmin,ymax,xmax] normalized 0-1000 "
+                "and its visible title text.\n"
+                "Return ONLY raw JSON array: [{\"box\":[y1,x1,y2,x2],\"name\":\"title\"},...]\n"
+                "No markdown."
+            )
+            r = self._client().models.generate_content(
+                model='gemini-3.6-flash', contents=[img, prompt],
                 config=types.GenerateContentConfig(temperature=0.1))
+            
             t = r.text.strip()
-            if t.startswith("```json"): t = t[7:]
-            if t.startswith("```"): t = t[3:]
+            for pfx in ["```json", "```"]:
+                if t.startswith(pfx): t = t[len(pfx):]
             if t.endswith("```"): t = t[:-3]
             data = json.loads(t.strip())
-            self.root.after(0, self._fill_rename_tree, data)
+            
+            sw, sh = pyautogui.size()
+            raw = []
+            for it in data:
+                b = it.get("box", [])
+                nm = it.get("name", "未知")
+                if len(b) == 4:
+                    y1, x1, y2, x2 = b
+                    raw.append((int((x1+x2)/2/1000*sw), int((y1+y2)/2/1000*sh), nm))
+            
+            if not raw:
+                self._log("⚠  未识别到草稿"); self.status.configure(text="未识别"); return
+            
+            # 排序
+            raw.sort(key=lambda c: c[1])
+            rows, cur = [], []
+            for c in raw:
+                if not cur: cur.append(c)
+                else:
+                    if abs(c[1] - cur[0][1]) < 100: cur.append(c)
+                    else:
+                        cur.sort(key=lambda i: i[0]); rows.append(cur); cur = [c]
+            if cur: cur.sort(key=lambda i: i[0]); rows.append(cur)
+            
+            self.drafts = []
+            for row in rows: self.drafts.extend(row)
+            
+            self.after(0, self._fill_queue)
+            preview = ", ".join(d[2] for d in self.drafts[:3])
+            if len(self.drafts) > 3: preview += "..."
+            self._log(f"识别到 {len(self.drafts)} 个: {preview}")
+            self.status.configure(text=f"{len(self.drafts)} 个草稿就绪")
         except Exception as e:
-            print(f"❌ {e}")
+            self._log(f"✗ {e}"); self.status.configure(text="扫描失败")
 
-    def _fill_rename_tree(self, data):
-        for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
-        dm = {os.path.basename(f): os.path.dirname(f) for f in self.selected_files}
-        self.rename_map = []
-        for item in data:
-            o, n = item.get("old"), item.get("new")
-            if o and n and o in dm:
-                d = dm[o]
-                self.rename_map.append((os.path.join(d, o), os.path.join(d, n)))
-                self.ren_tree.insert("", "end", values=(o, n))
-        self.btn_exec_rename.config(state="normal")
-        print("✅ 预览已生成")
+    def _fill_queue(self):
+        for i in self.queue.get_children(): self.queue.delete(i)
+        for i, (x, y, nm) in enumerate(self.drafts):
+            self.queue.insert("", "end", iid=str(i), values=(i+1, nm, "待处理"))
+        if self.drafts: self.queue.selection_set("0")
 
-    def execute_rename(self):
-        if not self.rename_map: return
-        ok = 0
-        for o, n in self.rename_map:
-            try: os.rename(o, n); ok += 1
-            except Exception as e: print(f"❌ {os.path.basename(o)}: {e}")
-        messagebox.showinfo("完成", f"成功重命名 {ok}/{len(self.rename_map)} 个文件")
-        self.selected_files = []; self.lbl_file_count.config(text="未选择")
-        for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
-        self.btn_exec_rename.config(state="disabled")
+    # ═══════════════════════ 导出核心 ═══════════════════════
+    def _stop(self):
+        self.stop_flag = True
+        self._log("🛑 中断"); self.start_btn.configure(state="normal")
+        self.status.configure(text="已中断")
 
-    def _build_tab_settings(self):
-        af = tb.LabelFrame(self.tab4, text="API Key", padding=10, bootstyle="secondary")
-        af.pack(fill="x", padx=8, pady=8)
-        tb.Label(af, text="默认为作者公用 Key，有速率限制。\n建议到 Google AI Studio 免费申请自己的。",
-                 foreground="#dc3545", font=("Segoe UI", 9), justify="left").pack(anchor="w", pady=4)
-        self.api_key_var = tk.StringVar(value=self.api_key)
-        tb.Entry(af, textvariable=self.api_key_var, show="*").pack(fill="x", pady=4)
-        tb.Button(af, text="保存", bootstyle="success-outline",
-                  command=lambda: (self.save_config(), messagebox.showinfo("✓", "已保存"))
-                  ).pack(anchor="e")
+    def _wait_done(self):
+        x, y = self.coords['popup_close']; tc = self.close_color
+        # 强制等 5 秒让进度条弹窗完全出现
+        self._log("  · 等待进度条 (5s)")
+        for _ in range(5):
+            if self.stop_flag: return
+            time.sleep(1)
+        # 轮询像素直到关闭按钮出现
+        self._log("  · 等待导出完成...")
+        while not self.stop_flag:
+            r, g, b = pyautogui.pixel(x, y)
+            if abs(r-tc[0])+abs(g-tc[1])+abs(b-tc[2]) < 30:
+                self._log("  ✓ 导出完成"); break
+            time.sleep(2)
 
-    # ======================== 字幕提取 ========================
-    def extract_subtitles_thread(self):
+    def _start_export(self):
+        if None in self.coords.values():
+            messagebox.showerror("提示", "请先完成坐标录制"); return
+        if not self.drafts:
+            messagebox.showerror("提示", "请先 AI 扫描首页"); return
+        sel = self.queue.selection()
+        if not sel:
+            messagebox.showwarning("提示", "请在队列中选中一行作为起始点"); return
+        
+        idx = int(sel[0])
+        nm = self.drafts[idx][2]
+        n = len(self.drafts) - idx
+        if not messagebox.askyesno("确认开始",
+                f"从【{nm}】(第{idx+1}个) 开始\n共 {n} 个待导出，确认？"): return
+        
+        self.stop_flag = False; self.start_btn.configure(state="disabled")
+        threading.Thread(target=self._export_loop, args=(idx,), daemon=True).start()
+
+    def _chk(self):
+        if self.stop_flag: raise Exception("用户中断")
+
+    def _qst(self, i, st):
+        self.after(0, lambda: self.queue.set(str(i), "st", st))
+
+    def _export_loop(self, start):
+        try:
+            total = len(self.drafts); n = total - start
+            self._log(f"\n{'─'*32}\n开始导出：共 {n} 个")
+            
+            for i in range(start, total):
+                self._chk()
+                dx, dy, nm = self.drafts[i]
+                self._qst(i, "▶ 处理中")
+                self.status.configure(text=f"导出 {i-start+1}/{n}")
+                self._log(f"\n[{i+1}/{total}] {nm}")
+                
+                pyautogui.click(dx, dy)
+                self._log("  · 加载草稿 (7s)")
+                for _ in range(7): self._chk(); time.sleep(1)
+                
+                self._chk(); pyautogui.click(*self.coords['export'])
+                self._log("  · 点击导出")
+                for _ in range(3): self._chk(); time.sleep(1)
+                
+                self._chk(); pyautogui.click(*self.coords['confirm'])
+                self._log("  · 确认导出")
+                
+                self._wait_done(); self._chk()
+                
+                pyautogui.click(*self.coords['popup_close'])
+                self._log("  · 关闭弹窗")
+                for _ in range(3): self._chk(); time.sleep(1)
+                
+                self._chk(); pyautogui.click(*self.coords['draft_close'])
+                self._log("  · 返回首页")
+                
+                self._qst(i, "✅")
+                self._log("  · 休息 5s")
+                for _ in range(5): self._chk(); time.sleep(1)
+            
+            self._log(f"\n🎉 全部完成！共导出 {n} 个")
+            self.status.configure(text=f"完成 {n} 个")
+        except Exception as e:
+            self._log(f"\n⏸ {e}")
+        finally:
+            self.after(0, lambda: self.start_btn.configure(state="normal"))
+
+    # ═══════════════════════ 字幕提取 ═══════════════════════
+    def _sub_thread(self):
         if not messagebox.askyesno("确认", "草稿全部来自云空间且未打开过？"): return
         threading.Thread(target=self._extract_subs, daemon=True).start()
 
     def _extract_subs(self):
-        print("提取字幕轨道...")
-        base = self.draft_path_var.get()
-        if not os.path.exists(base): print(f"❌ 目录不存在"); return
+        self._log("提取字幕...")
+        base = self.draft_dir.get()
+        if not os.path.exists(base): self._log("✗ 目录不存在"); return
         out = os.path.join(os.path.expanduser("~"), "Desktop", "srt")
         os.makedirs(out, exist_ok=True)
         
@@ -383,291 +615,95 @@ class App:
             ip = os.path.join(fp, 'draft_info.json')
             if os.path.exists(ip):
                 try:
-                    with open(ip, 'r', encoding='utf-8') as f:
-                        m = re.search(r'\d+', json.load(f).get('draft_name', ''))
-                        if m: ep = int(m.group())
+                    m = re.search(r'\d+', json.load(open(ip, encoding='utf-8')).get('draft_name', ''))
+                    if m: ep = int(m.group())
                 except: pass
             if ep is None:
-                m = re.search(r'\d+', fn)
-                ep = int(m.group()) if m else 999999
+                m = re.search(r'\d+', fn); ep = int(m.group()) if m else 999999
             items.append({"jp": jp, "ep": ep, "fn": fn})
         items.sort(key=lambda x: x["ep"])
         
         cnt, ok = 1, 0
         for d in items:
             try:
-                with open(d["jp"], 'r', encoding='utf-8') as f: data = json.load(f)
-                tdict = {t['id']: t for t in data.get('materials', {}).get('texts', [])}
+                data = json.load(open(d["jp"], encoding='utf-8'))
+                td = {t['id']: t for t in data.get('materials', {}).get('texts', [])}
                 tracks = [t for t in data.get('tracks', []) if t.get('type') == 'text']
                 if not tracks: continue
                 segs = []
-                for tr in tracks:
-                    tr['flag'] = 2
-                    segs.extend(tr.get('segments', []))
+                for tr in tracks: tr['flag'] = 2; segs.extend(tr.get('segments', []))
                 segs.sort(key=lambda x: x.get('target_timerange', {}).get('start', 0))
                 lines, idx = [], 1
                 for seg in segs:
-                    tm = tdict.get(seg.get('material_id'))
+                    tm = td.get(seg.get('material_id'))
                     if not tm: continue
                     try: txt = json.loads(tm.get('content', '{}')).get('text', '')
                     except: txt = tm.get('content', '')
                     if not txt.strip(): continue
-                    tr = seg.get('target_timerange', {})
-                    s = tr.get('start', 0)
-                    lines += [str(idx), f"{format_time(s)} --> {format_time(s+tr.get('duration',0))}", txt.strip(), ""]
+                    tr = seg.get('target_timerange', {}); s = tr.get('start', 0)
+                    lines += [str(idx), f"{fmt_time(s)} --> {fmt_time(s+tr.get('duration',0))}", txt.strip(), ""]
                     idx += 1
                 if lines:
                     ep = d["ep"] if d["ep"] != 999999 else cnt
                     sp = os.path.join(out, f"{ep}.srt")
                     if os.path.exists(sp): sp = os.path.join(out, f"{ep}_{cnt}.srt")
-                    with open(sp, 'w', encoding='utf-8') as f: f.write("\n".join(lines))
-                    with open(d["jp"], 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False)
-                    print(f"  ✓ {d['fn']} → {os.path.basename(sp)}")
+                    open(sp, 'w', encoding='utf-8').write("\n".join(lines))
+                    json.dump(data, open(d["jp"], 'w', encoding='utf-8'), ensure_ascii=False)
+                    self._log(f"  ✓ {d['fn']} → {os.path.basename(sp)}")
                     ok += 1; cnt += 1
-            except Exception as e: print(f"  ✗ {d['fn']}: {e}")
-        print(f"完成，共提取 {ok} 个")
+            except Exception as e: self._log(f"  ✗ {d['fn']}: {e}")
+        self._log(f"完成，提取 {ok} 个")
 
-    # ======================== 坐标向导 ========================
-    def start_wizard(self):
-        self.recording_state = "export"
-        self.lbl_guide.config(text="[1/4] 鼠标放在【导出】按钮上，按 F8", foreground="#0d6efd")
-        print("向导开始，请按 F8 录制各按钮位置")
+    # ═══════════════════════ 重命名 ═══════════════════════
+    def _ren_preview_thread(self):
+        if not self.sel_files: messagebox.showwarning("提示", "请先选择文件"); return
+        threading.Thread(target=self._ren_preview, daemon=True).start()
 
-    def on_key_release(self, key):
-        if key == keyboard.Key.f8 and self.recording_state:
-            x, y = pyautogui.position()
-            steps = {
-                "export": ("confirm", "[2/4] 手动点导出，鼠标放在蓝色【确认导出】上，按 F8",
-                           f"  ✓ 导出按钮 ({x},{y})"),
-                "confirm": ("popup_close", "[3/4] 手动确认导出，等完成后鼠标放在【关闭】上，按 F8",
-                            f"  ✓ 确认按钮 ({x},{y})"),
-                "popup_close": ("draft_close", "[4/4] 点掉弹窗，鼠标放在右上角【×】上，按 F8",
-                                None),
-                "draft_close": (None, "✅ 录制完成", f"  ✓ 关闭草稿 ({x},{y})")
-            }
-            
-            state = self.recording_state
-            self.coords[state] = (x, y)
-            
-            if state == "popup_close":
-                r, g, b = pyautogui.pixel(x, y)
-                self.close_btn_color = (r, g, b)
-                print(f"  ✓ 弹窗关闭 ({x},{y}) 颜色 RGB({r},{g},{b})")
-            elif steps[state][2]:
-                print(steps[state][2])
-            
-            next_state, label_text, _ = steps[state]
-            self.recording_state = next_state
-            
-            if next_state is None:
-                self.save_config()
-                self.root.after(0, lambda: self.lbl_guide.config(text=label_text, foreground="#28a745"))
-                print("向导完成！坐标已保存")
-            else:
-                self.root.after(0, lambda t=label_text: self.lbl_guide.config(text=t, foreground="#0d6efd"))
-
-    # ======================== AI 扫描草稿 ========================
-    def scan_drafts_thread(self):
-        threading.Thread(target=self._scan_drafts, daemon=True).start()
-
-    def _scan_drafts(self):
-        print("截屏并发送给 AI 识别...")
-        self.status_var.set("AI 扫描中...")
-        pyautogui.screenshot("home_screen.png")
-        client = self.get_api_client()
-        
+    def _ren_preview(self):
+        self._log("AI 分析重命名...")
+        fns = [os.path.basename(f) for f in self.sel_files]
+        prompt = (f"Rename these files to: {self.fmt_entry.get()}\n"
+                  f"Files: {json.dumps(fns, ensure_ascii=False)}\n"
+                  f"Return ONLY raw JSON array with 'old' and 'new' keys.")
         try:
-            image = Image.open("home_screen.png")
-            prompt = (
-                "You are analyzing a video editor (JianYing) home screen showing a grid of draft thumbnails.\n"
-                "Find EVERY video draft thumbnail visible on screen.\n"
-                "For each draft, return:\n"
-                "1. The bounding box as [ymin, xmin, ymax, xmax] normalized to 1000\n"
-                "2. The visible title/name text below or on the thumbnail\n\n"
-                "Return ONLY a JSON array of objects with keys 'box' (array of 4 ints) and 'name' (string).\n"
-                "Example: [{\"box\": [100, 50, 300, 250], \"name\": \"我的视频草稿\"}]\n"
-                "No markdown formatting. Just raw JSON."
-            )
-            r = client.models.generate_content(
-                model='gemini-3.6-flash', contents=[image, prompt],
+            r = self._client().models.generate_content(
+                model='gemini-3.6-flash', contents=prompt,
                 config=types.GenerateContentConfig(temperature=0.1))
-            
-            text = r.text.strip()
-            if text.startswith("```json"): text = text[7:]
-            if text.startswith("```"): text = text[3:]
-            if text.endswith("```"): text = text[:-3]
-            
-            data = json.loads(text.strip())
-            
-            sw, sh = pyautogui.size()
-            raw = []
-            for item in data:
-                box = item.get("box", [])
-                name = item.get("name", "未知草稿")
-                if len(box) == 4:
-                    ymin, xmin, ymax, xmax = box
-                    cx = int((xmin+xmax)/2/1000*sw)
-                    cy = int((ymin+ymax)/2/1000*sh)
-                    raw.append((cx, cy, name))
-            
-            if not raw:
-                print("⚠️ 未识别到草稿")
-                self.status_var.set("未识别到草稿"); return
-            
-            # 排序：按 Y 分行，每行按 X 排
-            raw.sort(key=lambda c: c[1])
-            rows, cur = [], []
-            for c in raw:
-                if not cur: cur.append(c)
-                else:
-                    if abs(c[1] - cur[0][1]) < 100: cur.append(c)
-                    else:
-                        cur.sort(key=lambda i: i[0])
-                        rows.append(cur); cur = [c]
-            if cur:
-                cur.sort(key=lambda i: i[0])
-                rows.append(cur)
-            
-            self.drafts_list = []
-            for row in rows: self.drafts_list.extend(row)
-            
-            self.root.after(0, self._fill_task_tree)
-            names_preview = ", ".join([d[2] for d in self.drafts_list[:3]])
-            if len(self.drafts_list) > 3: names_preview += "..."
-            print(f"识别到 {len(self.drafts_list)} 个草稿: {names_preview}")
-            self.status_var.set(f"{len(self.drafts_list)} 个草稿已就绪")
-        except Exception as e:
-            print(f"❌ {e}")
-            self.status_var.set("扫描失败")
+            t = r.text.strip()
+            for pfx in ["```json", "```"]:
+                if t.startswith(pfx): t = t[len(pfx):]
+            if t.endswith("```"): t = t[:-3]
+            data = json.loads(t.strip())
+            self.after(0, self._fill_ren, data)
+        except Exception as e: self._log(f"✗ {e}")
 
-    def _fill_task_tree(self):
-        for i in self.task_tree.get_children(): self.task_tree.delete(i)
-        for i, (x, y, name) in enumerate(self.drafts_list):
-            self.task_tree.insert("", "end", iid=str(i), values=(i+1, name, "待处理"))
-        if self.drafts_list:
-            self.task_tree.selection_set("0")
+    def _fill_ren(self, data):
+        for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
+        dm = {os.path.basename(f): os.path.dirname(f) for f in self.sel_files}
+        self.rename_map = []
+        for it in data:
+            o, n = it.get("old"), it.get("new")
+            if o and n and o in dm:
+                d = dm[o]; self.rename_map.append((os.path.join(d, o), os.path.join(d, n)))
+                self.ren_tree.insert("", "end", values=(o, n))
+        self.ren_btn.configure(state="normal")
+        self._log("✓ 预览已生成")
 
-    # ======================== 导出核心 ========================
-    def stop_task(self):
-        self.stop_flag = True
-        print("🛑 中断指令已接收")
-        self.start_btn.config(state="normal")
-        self.status_var.set("已中断")
+    def _exec_rename(self):
+        if not self.rename_map: return
+        ok = sum(1 for o, n in self.rename_map if not (lambda: (os.rename(o, n), True)[-1] if True else False)() is None)
+        # simpler:
+        ok = 0
+        for o, n in self.rename_map:
+            try: os.rename(o, n); ok += 1
+            except: pass
+        messagebox.showinfo("完成", f"成功 {ok}/{len(self.rename_map)}")
+        self.sel_files = []; self.file_lbl.configure(text="未选择")
+        for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
+        self.ren_btn.configure(state="disabled")
 
-    def wait_for_export_done(self):
-        """
-        回归简单可靠的方案：点击确认导出后先强制等待 5 秒
-        让导出进度对话框完全出现，然后再用简单的像素颜色匹配
-        等待关闭按钮出现（与之前第一集成功时的逻辑完全一致）。
-        """
-        x, y = self.coords['popup_close']
-        tc = self.close_btn_color
-        
-        # 强制等待 5 秒，让导出进度条对话框完全渲染出来
-        print("  · 等待进度条出现 (5s)...")
-        for _ in range(5):
-            if self.stop_flag: return
-            time.sleep(1)
-        
-        # 简单轮询：等待像素颜色与目标匹配（关闭按钮出现 = 导出完成）
-        print("  · 等待导出完成...")
-        while not self.stop_flag:
-            r, g, b = pyautogui.pixel(x, y)
-            diff = abs(r-tc[0]) + abs(g-tc[1]) + abs(b-tc[2])
-            if diff < 30:
-                print("  ✓ 导出完成")
-                break
-            time.sleep(2)
-
-    def start_task(self):
-        if None in self.coords.values():
-            messagebox.showerror("未就绪", "请先完成坐标录制向导"); return
-        if not self.drafts_list:
-            messagebox.showerror("未就绪", "请先点击【AI 扫描首页】"); return
-        
-        sel = self.task_tree.selection()
-        if not sel:
-            messagebox.showwarning("提示", "请在导出队列中选中一行作为起始点"); return
-            
-        start_idx = int(sel[0])
-        start_name = self.drafts_list[start_idx][2]
-        
-        if not messagebox.askyesno("确认开始",
-                f"将从第 {start_idx+1} 个草稿【{start_name}】开始导出，\n"
-                f"共 {len(self.drafts_list) - start_idx} 个待处理。\n\n确认开始？"):
-            return
-        
-        self.stop_flag = False
-        self.start_btn.config(state="disabled")
-        threading.Thread(target=self._run_export, args=(start_idx,), daemon=True).start()
-
-    def check_stop(self):
-        if self.stop_flag: raise Exception("用户中断")
-
-    def _update_status(self, idx, status):
-        self.root.after(0, lambda: self.task_tree.set(str(idx), "状态", status))
-
-    def _run_export(self, start):
-        try:
-            total = len(self.drafts_list)
-            count = total - start
-            print(f"\n{'─'*36}")
-            print(f"开始导出：第{start+1}集 → 第{total}集 (共{count}个)")
-            
-            for i in range(start, total):
-                self.check_stop()
-                dx, dy, name = self.drafts_list[i]
-                self._update_status(i, "▶ 处理中")
-                self.status_var.set(f"导出中  {i-start+1}/{count}")
-                print(f"\n[{i+1}/{total}] {name}")
-                
-                # 1. 打开草稿
-                pyautogui.click(dx, dy)
-                print("  · 加载草稿 (7s)")
-                for _ in range(7): self.check_stop(); time.sleep(1)
-                
-                # 2. 导出
-                self.check_stop()
-                pyautogui.click(*self.coords['export'])
-                print("  · 点击导出")
-                for _ in range(3): self.check_stop(); time.sleep(1)
-                
-                # 3. 确认
-                self.check_stop()
-                pyautogui.click(*self.coords['confirm'])
-                print("  · 点击确认导出")
-                
-                # 4. 等待完成
-                self.wait_for_export_done()
-                self.check_stop()
-                
-                # 5. 关闭弹窗
-                pyautogui.click(*self.coords['popup_close'])
-                print("  · 关闭完成弹窗")
-                for _ in range(3): self.check_stop(); time.sleep(1)
-                
-                # 6. 返回首页
-                self.check_stop()
-                pyautogui.click(*self.coords['draft_close'])
-                print("  · 返回首页")
-                
-                self._update_status(i, "✅")
-                
-                print("  · 休息 5s")
-                for _ in range(5): self.check_stop(); time.sleep(1)
-                
-            print(f"\n🎉 全部完成！共导出 {count} 个草稿")
-            self.status_var.set(f"全部完成  共{count}个")
-            
-        except Exception as e:
-            print(f"\n⏸ {e}")
-        finally:
-            self.root.after(0, lambda: self.start_btn.config(state="normal"))
-
+# ─── 启动 ──────────────────────────────────────────────────
 if __name__ == "__main__":
-    check_authorization()
-    app = tb.Window("剪映 AI 极速群导", themename="cosmo")
-    style = tb.Style()
-    style.configure('.', font=('Segoe UI', 9))
-    gui = App(app)
+    check_auth()
+    app = App()
     app.mainloop()
