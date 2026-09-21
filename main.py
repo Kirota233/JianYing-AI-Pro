@@ -15,7 +15,7 @@ from google.genai import types
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.2.1"
+VERSION   = "1.2.2"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -634,28 +634,22 @@ class App(ctk.CTk):
             if not os.path.isdir(fp) or fn == 'srt': continue
             jp = os.path.join(fp, 'draft_content.json')
             if not os.path.exists(jp): continue
-            ep = None
-            ip = os.path.join(fp, 'draft_info.json')
-            if os.path.exists(ip):
-                try:
-                    m = re.search(r'\d+', json.load(open(ip, encoding='utf-8')).get('draft_name', ''))
-                    if m: ep = int(m.group())
-                except: pass
-            if ep is None:
-                m = re.search(r'\d+', fn); ep = int(m.group()) if m else 999999
-            items.append({"jp": jp, "ep": ep, "fn": fn})
-        items.sort(key=lambda x: x["ep"])
+            items.append({"jp": jp, "fn": fn})
         
-        cnt, ok = 1, 0
+        ok = 0
         for d in items:
             try:
                 data = json.load(open(d["jp"], encoding='utf-8'))
                 td = {t['id']: t for t in data.get('materials', {}).get('texts', [])}
-                tracks = [t for t in data.get('tracks', []) if t.get('type') == 'text']
-                if not tracks: continue
+                tracks = data.get('tracks', [])
+                text_tracks = [t for t in tracks if t.get('type') == 'text']
+                
+                if not text_tracks: continue
+                
                 segs = []
-                for tr in tracks: tr['flag'] = 2; segs.extend(tr.get('segments', []))
+                for tr in text_tracks: segs.extend(tr.get('segments', []))
                 segs.sort(key=lambda x: x.get('target_timerange', {}).get('start', 0))
+                
                 lines, idx = [], 1
                 for seg in segs:
                     tm = td.get(seg.get('material_id'))
@@ -666,17 +660,21 @@ class App(ctk.CTk):
                     tr = seg.get('target_timerange', {}); s = tr.get('start', 0)
                     lines += [str(idx), f"{fmt_time(s)} --> {fmt_time(s+tr.get('duration',0))}", txt.strip(), ""]
                     idx += 1
+                
                 if lines:
-                    ep = d["ep"] if d["ep"] != 999999 else cnt
-                    sp = os.path.join(out, f"{ep}.srt")
-                    if os.path.exists(sp): sp = os.path.join(out, f"{ep}_{cnt}.srt")
+                    # 命名为原草稿文件夹名
+                    sp = os.path.join(out, f"{d['fn']}.srt")
                     open(sp, 'w', encoding='utf-8').write("\n".join(lines))
+                    
+                    # 彻底删除字幕轨道
+                    data['tracks'] = [t for t in tracks if t.get('type') != 'text']
                     json.dump(data, open(d["jp"], 'w', encoding='utf-8'), ensure_ascii=False)
+                    
                     self._log(f"  ✓ {d['fn']} → {os.path.basename(sp)}")
-                    ok += 1; cnt += 1
+                    ok += 1
             except Exception as e: self._log(f"  ✗ {d['fn']}: {e}")
-        self._log(f"完成，提取 {ok} 个")
-        self._show_toast("提取完成", f"共提取 {ok} 个字幕至桌面/srt", C_SUCCESS)
+        self._log(f"完成，提取并删除字幕 {ok} 个")
+        self._show_toast("提取完成", f"共处理 {ok} 个草稿\n字幕已保存至桌面/srt", C_SUCCESS)
 
     # ═══════════════════════ 重命名 ═══════════════════════
     def _ren_preview_thread(self):
