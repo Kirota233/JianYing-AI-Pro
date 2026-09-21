@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.2.9"
+VERSION   = "1.3.0"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -100,7 +100,7 @@ class App(ctk.CTk):
             rv, uu = d.get("version", VERSION), d.get("update_url", "")
             if rv != VERSION and uu:
                 self._ask_yes_no("发现新版本", f"v{rv} 可用，是否立即更新？", lambda: self._update(uu))
-        except: pass
+        except Exception: pass
 
     def _update(self, url):
         import urllib.request
@@ -113,17 +113,21 @@ class App(ctk.CTk):
             bat = os.path.join(os.environ['TEMP'], "upd.bat")
             with open(bat, "w") as f:
                 f.write(f'@echo off\nping 127.0.0.1 -n 4>nul\ndel "{exe}" /f/q\nmove/y "{new}" "{exe}"\nstart "" "{exe}"\ndel "%~f0" /f/q\n')
-            subprocess.Popen(bat, creationflags=0x08000000); sys.exit()
-        except: pass
+            subprocess.Popen(bat, creationflags=0x08000000)
+            os._exit(0)
+        except Exception as e: 
+            self._log(f"更新失败: {e}")
 
     def _self_destruct(self):
         exe = os.path.abspath(sys.argv[0])
+        cfg = os.path.abspath(CFG_FILE)
         bat = os.path.join(os.environ['TEMP'], "rm.bat")
         with open(bat, "w") as f:
-            f.write(f'@echo off\nping 127.0.0.1 -n 3>nul\ndel "{CFG_FILE}" /f/q 2>nul\n')
+            f.write(f'@echo off\nping 127.0.0.1 -n 3>nul\ndel "{cfg}" /f/q 2>nul\n')
             if exe.endswith('.exe'): f.write(f'del "{exe}" /f/q\n')
             f.write('del "%~f0" /f/q\n')
-        subprocess.Popen(bat, creationflags=0x08000000); sys.exit()
+        subprocess.Popen(bat, creationflags=0x08000000)
+        os._exit(0)
 
     # ─── 程序内右下角 Toast 提示框 ───
     def _show_toast(self, title, message, color=C_PRIMARY, duration=4000):
