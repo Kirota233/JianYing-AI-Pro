@@ -17,15 +17,12 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
 # ==========================================
-# 授权控制模块 (云端 Kill-Switch)
+# 授权控制与自动更新模块 (Kill-Switch & Auto-Updater)
 # ==========================================
-# 在这里填入你的 Gitee / GitHub Raw 链接 (返回纯 JSON 的直链)
-# 格式示例: {"status": "active"} 
-# 如果改为 {"status": "destroy"}，程序会在下次启动时自毁。
 AUTH_URL = "https://gist.githubusercontent.com/Kirota233/db0d3500cf669ded30fb405c6d4bfd5a/raw/115393d6ae040c6ea5c31542a2b8d23f7e1afefa/auth.json" 
+APP_VERSION = "1.0.0"
 
 def check_authorization():
-    # 如果还没有配置真实的鉴权链接，直接放行（方便本地打包测试）
     if "placeholder" in AUTH_URL:
         return 
 
@@ -35,21 +32,54 @@ def check_authorization():
         status = data.get("status", "blocked")
         
         if status == "destroy":
-            # 执行自毁程序
             self_destruct()
         elif status == "blocked":
-            # 仅仅阻止运行
             tk.Tk().withdraw()
             messagebox.showerror("授权失败", "该软件未获授权或授权已过期，无法继续运行。")
             sys.exit(0)
-        elif status == "active":
-            pass # 正常放行
-        else:
-            sys.exit(0)
+            
+        # 检查自动更新
+        remote_version = data.get("version", APP_VERSION)
+        update_url = data.get("update_url", "")
+        if remote_version != APP_VERSION and update_url:
+            root = tk.Tk()
+            root.withdraw()
+            if messagebox.askyesno("发现新版本", f"检测到新版本 v{remote_version} (当前版本 v{APP_VERSION})。\n\n是否立即进行自动更新？"):
+                perform_update(update_url)
+            root.destroy()
+            
     except Exception as e:
-        # 断网时：你可以选择放行，或者要求必须联网才能运行
-        tk.Tk().withdraw()
-        messagebox.showerror("网络错误", "无法连接到授权服务器，请检查网络后再试！")
+        pass
+
+def perform_update(update_url):
+    import urllib.request
+    
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showinfo("正在下载更新", "程序正在后台下载新版本，这可能需要几十秒钟。\n\n请点击【确定】并稍候，下载完成后软件将自动重启。")
+    
+    try:
+        exe_path = os.path.abspath(sys.argv[0])
+        if not exe_path.endswith('.exe'):
+            messagebox.showwarning("更新提示", "当前处于 Python 源码运行模式，自动更新只在 EXE 打包版本中生效。")
+            return
+            
+        new_exe_path = exe_path + ".new"
+        urllib.request.urlretrieve(update_url, new_exe_path)
+        
+        bat_path = os.path.join(os.environ['TEMP'], "update_app.bat")
+        with open(bat_path, "w", encoding="utf-8") as f:
+            f.write('@echo off\n')
+            f.write('ping 127.0.0.1 -n 4 > nul\n')
+            f.write(f'del "{exe_path}" /f /q\n')
+            f.write(f'move /y "{new_exe_path}" "{exe_path}"\n')
+            f.write(f'start "" "{exe_path}"\n')
+            f.write('del "%~f0" /f /q\n')
+            
+        subprocess.Popen(bat_path, creationflags=subprocess.CREATE_NO_WINDOW)
+        sys.exit(0)
+    except Exception as e:
+        messagebox.showerror("更新失败", f"下载或替换文件失败: {e}")
         sys.exit(0)
 
 def self_destruct():
