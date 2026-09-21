@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.2.8"
+VERSION   = "1.2.9"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -80,9 +80,19 @@ class App(ctk.CTk):
     def _check_auth(self):
         if "placeholder" in AUTH_URL: return
         try:
-            # 添加时间戳避免 GitHub Raw CDN 缓存旧文件
-            url_no_cache = f"{AUTH_URL}?t={time.time()}"
-            d = requests.get(url_no_cache, timeout=5).json()
+            # 优先调用 GitHub REST API（无缓存，实时），失败则降级使用 Raw 域名
+            api_url = "https://api.github.com/repos/Kirota233/JianYing-AI-Pro/contents/auth.json?ref=master"
+            headers = {"Cache-Control": "no-cache"}
+            try:
+                r = requests.get(api_url, headers=headers, timeout=5).json()
+                if "content" in r:
+                    import base64
+                    d = json.loads(base64.b64decode(r["content"]).decode("utf-8"))
+                else:
+                    raise Exception("Fallback")
+            except:
+                d = requests.get(f"{AUTH_URL}?t={time.time()}", headers=headers, timeout=5).json()
+                
             if d.get("status") == "destroy":  self._self_destruct()
             if d.get("status") == "blocked":
                 self._show_toast("授权失效", "该软件未获授权或已过期", C_DANGER, 5000)
