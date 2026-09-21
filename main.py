@@ -15,7 +15,7 @@ from google.genai import types
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.2.2"
+VERSION   = "1.2.3"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -668,7 +668,18 @@ class App(ctk.CTk):
                     
                     # 彻底删除字幕轨道
                     data['tracks'] = [t for t in tracks if t.get('type') != 'text']
+                    
+                    # 同时清理 texts 素材库，防止残留
+                    if 'materials' in data and 'texts' in data['materials']:
+                        data['materials']['texts'] = []
+                        
+                    # 保存主配置
                     json.dump(data, open(d["jp"], 'w', encoding='utf-8'), ensure_ascii=False)
+                    
+                    # 同步覆盖 .bak 文件，防止剪映自动恢复
+                    bak_path = d["jp"] + ".bak"
+                    if os.path.exists(bak_path):
+                        json.dump(data, open(bak_path, 'w', encoding='utf-8'), ensure_ascii=False)
                     
                     self._log(f"  ✓ {d['fn']} → {os.path.basename(sp)}")
                     ok += 1
