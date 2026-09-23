@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.3.0"
+VERSION   = "1.3.1"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -632,6 +632,8 @@ class App(ctk.CTk):
                 
                 self._chk(); pyautogui.click(*self.coords['confirm'])
                 self._log("  · 确认导出")
+                time.sleep(1)
+                pyautogui.press('enter')
                 
                 self._wait_done(); self._chk()
                 
@@ -643,8 +645,8 @@ class App(ctk.CTk):
                 self._log("  · 返回首页")
                 
                 self._qst(i, "✅")
-                self._log("  · 休息 5s")
-                for _ in range(5): self._chk(); time.sleep(1)
+                self._log("  · 休息 3.5s")
+                for _ in range(7): self._chk(); time.sleep(0.5)
             
             self._log(f"\n🎉 全部完成！共导出 {n} 个")
             self.status.configure(text=f"完成 {n} 个")
@@ -749,7 +751,9 @@ class App(ctk.CTk):
             data = json.loads(t.strip())
             self.after(0, self._fill_ren, data)
         except Exception as e: 
-            self._log(f"✗ {e}")
+            err_msg = str(e)
+            self._log(f"✗ {err_msg}")
+            self.after(0, lambda: self._show_toast("AI 重命名失败", err_msg[:60], C_DANGER))
             self.after(0, self._reset_ren_ui)
 
     def _reset_ren_ui(self):
