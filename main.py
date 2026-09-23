@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.0"
+VERSION   = "1.5.0"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -75,6 +75,7 @@ class App(ctk.CTk):
         self.sel_files = []
         self.rename_map = []
         self.first_run = True
+        self.first_sub = True
         
         self._load_cfg()
         self._build_ui()
@@ -184,8 +185,7 @@ class App(ctk.CTk):
                 
             msg = (
                 "1. 请不要把本程序窗口遮挡住剪映的草稿封面\n"
-                "2. 草稿必须从云空间下载，且绝对不能打开过\n"
-                "3. 录制坐标请用废弃草稿进行\n\n"
+                "2. 录制坐标请用废弃草稿进行，避免误操作\n\n"
                 "【网络建议】\n"
                 "本程序核心 AI 强依赖 Google Gemini。\n"
                 "• 强烈建议在设置中填入您自己的 API Key\n"
@@ -206,12 +206,14 @@ class App(ctk.CTk):
                     self.close_color = tuple(loaded_color)
                 self.api_key = d.get("api_key", DEFAULT_KEY)
                 self.first_run = d.get("first_run", True)
+                self.first_sub = d.get("first_sub", True)
             except: pass
 
     def _save_cfg(self):
         json.dump({"coords": self.coords, "color": self.close_color,
                     "api_key": self.key_entry.get().strip(),
-                    "first_run": self.first_run},
+                    "first_run": self.first_run,
+                    "first_sub": getattr(self, 'first_sub', True)},
                    open(CFG_FILE, "w"))
 
     # ═══════════════════════ UI 构建 ═══════════════════════
@@ -356,7 +358,7 @@ class App(ctk.CTk):
                       font=("Segoe UI", 12, "bold"), text_color="#ffffff",
                       command=self._sub_thread).pack(fill="x", pady=(0, 6))
 
-        ctk.CTkButton(btn_frame, text="🎨  应用模板字体 & 解除字幕隐藏", height=36,
+        ctk.CTkButton(btn_frame, text="🎨  统一 Noto Sans Bold & 解除隐藏", height=36,
                       corner_radius=8, fg_color=C_PRIMARY, hover_color="#2563eb",
                       font=("Segoe UI", 12, "bold"), text_color="#ffffff",
                       command=self._fix_font_thread).pack(fill="x")
@@ -365,7 +367,7 @@ class App(ctk.CTk):
         info_card = self._card(tab)
         info_card.pack(fill="x", padx=4)
         for t in ["提取文本为 SRT 格式，并彻底删除原草稿字幕轨道",
-                   "修复字体可从选定草稿提取正确字体并覆盖所有草稿"]:
+                   "强制将所有草稿的字幕统一为 Noto Sans Bold 并显示"]:
             ctk.CTkLabel(info_card, text=f"·  {t}", font=("Segoe UI", 11),
                          text_color=C_MUTED, anchor="w").pack(fill="x", padx=8, pady=2)
 
@@ -508,32 +510,38 @@ class App(ctk.CTk):
         self._log("向导开始，请按 F8 录制各按钮位置")
 
     def _on_key(self, key):
-        if key == keyboard.Key.f8 and self.rec_state:
-            x, y = pyautogui.position()
-            flow = {
-                "export":      ("confirm",     "[2/4] 点导出 → 鼠标放在【确认导出】上 → F8"),
-                "confirm":     ("popup_close", "[3/4] 点确认 → 等导出完 → 鼠标放在【关闭】上 → F8"),
-                "popup_close": ("draft_close", "[4/4] 关弹窗 → 鼠标放在右上角【×】上 → F8"),
-                "draft_close": (None,          "● 坐标已就绪"),
-            }
-            self.coords[self.rec_state] = (x, y)
-            
-            if self.rec_state == "popup_close":
-                r, g, b = pyautogui.pixel(x, y)
-                self.close_color = (r, g, b)
-                self._log(f"  ✓ 弹窗关闭 ({x},{y}) RGB({r},{g},{b})")
-            else:
-                self._log(f"  ✓ {self.rec_state} ({x},{y})")
-            
-            nxt, txt = flow[self.rec_state]
-            self.rec_state = nxt
-            
-            color = C_SUCCESS if nxt is None else C_PRIMARY
-            self.after(0, lambda: self.guide_lbl.configure(text=txt, text_color=color))
-            
-            if nxt is None:
-                self._save_cfg()
-                self._log("向导完成，坐标已保存")
+        if self.rec_state:
+            if key == keyboard.Key.f8:
+                x, y = pyautogui.position()
+                self.coords[self.rec_state] = (x, y)
+                if self.rec_state == "popup_close":
+                    r, g, b = pyautogui.pixel(x, y)
+                    self.close_color = (r, g, b)
+                    self._log(f"  ✓ 弹窗/返回 ({x},{y}) RGB({r},{g},{b})")
+                else:
+                    self._log(f"  ✓ {self.rec_state} ({x},{y})")
+                self._next_rec()
+            elif key == keyboard.Key.f9 and self.rec_state == "draft_close":
+                self.coords[self.rec_state] = None
+                self._log(f"  ✓ 跳过 {self.rec_state}")
+                self._next_rec()
+
+    def _next_rec(self):
+        flow = {
+            "export":      ("confirm",     "2/4 点导出→鼠标在【确认导出】上→F8"),
+            "confirm":     ("popup_close", "3/4 鼠标在【返回首页】或【关闭】上→F8"),
+            "popup_close": ("draft_close", "4/4 鼠标在【关闭草稿】上→F8 (若刚点了返回首页, 按F9跳过)"),
+            "draft_close": (None,          "● 坐标已就绪"),
+        }
+        nxt, txt = flow[self.rec_state]
+        self.rec_state = nxt
+        
+        color = C_SUCCESS if nxt is None else C_PRIMARY
+        self.after(0, lambda: self.guide_lbl.configure(text=txt, text_color=color))
+        
+        if nxt is None:
+            self._save_cfg()
+            self._log("向导完成，坐标已保存")
 
     # ═══════════════════════ AI 扫描 ═══════════════════════
     def _scan_thread(self):
@@ -677,14 +685,20 @@ class App(ctk.CTk):
                 time.sleep(1)
                 pyautogui.press('enter')
                 
-                self._wait_done(); self._chk()
-                
-                pyautogui.click(*self.coords['popup_close'])
-                self._log("  · 关闭弹窗")
-                for _ in range(3): self._chk(); time.sleep(1)
-                
-                self._chk(); pyautogui.click(*self.coords['draft_close'])
-                self._log("  · 返回首页")
+                if self.coords['draft_close']:
+                    self._wait_done(); self._chk()
+                    
+                    pyautogui.click(*self.coords['popup_close'])
+                    self._log("  · 关闭弹窗")
+                    for _ in range(3): self._chk(); time.sleep(1)
+                    
+                    self._chk(); pyautogui.click(*self.coords['draft_close'])
+                    self._log("  · 返回首页")
+                else:
+                    self._log("  · 返回首页 (后台导出)")
+                    time.sleep(1)
+                    pyautogui.click(*self.coords['popup_close'])
+                    for _ in range(4): self._chk(); time.sleep(1)
                 
                 self._qst(i, "✅")
                 self._log("  · 休息 3.5s")
@@ -701,36 +715,32 @@ class App(ctk.CTk):
             self.after(0, lambda: self.start_btn.configure(state="normal"))
 
     # ═══════════════════════ 字幕提取 ═══════════════════════
+    def _check_first_sub(self, next_func):
+        if self.first_sub:
+            self.first_sub = False
+            self._save_cfg()
+            msg = "【首次使用字幕功能须知】\n\n草稿必须是从云空间下载的，并且绝对不允许在剪映里双击打开过！\n\n如果打开过，请将其删除并重新从云空间下载后再操作！"
+            self._ask_yes_no("⚠️ 警告", msg, next_func, show_cancel=False)
+        else:
+            next_func()
+
     def _sub_thread(self):
-        self._ask_yes_no("安全确认", "草稿是否全部来自云空间\n且未双击打开过？", lambda: threading.Thread(target=self._extract_subs, daemon=True).start())
+        def _run():
+            self._ask_yes_no("安全确认", "确定执行？此操作将彻底删除字幕轨道", lambda: threading.Thread(target=self._extract_subs, daemon=True).start())
+        self._check_first_sub(_run)
 
     def _fix_font_thread(self):
-        self._ask_yes_no("安全确认", "此操作将修改目录下所有草稿的字体并解除隐藏，请确保未在剪映中打开。是否继续？", lambda: threading.Thread(target=self._fix_fonts, daemon=True).start())
+        def _run():
+            self._ask_yes_no("安全确认", "确定执行？此操作将统一字体并解除隐藏", lambda: threading.Thread(target=self._fix_fonts, daemon=True).start())
+        self._check_first_sub(_run)
 
     def _fix_fonts(self):
-        self._log("请选择作为模板的【正确字体】草稿文件夹...")
-        tpl_dir = filedialog.askdirectory(title="选择模板草稿 (例如: 龙骸契约37)")
-        if not tpl_dir: self._log("✗ 已取消"); return
+        tpl_font = {
+            "path": "C:/Users/13670/AppData/Local/Microsoft/Windows/Fonts/NotoSans-Bold (1).ttf",
+            "id": ""
+        }
+        self._log("将使用 Noto Sans Bold 作为统一字体...")
         
-        tpl_jp = os.path.join(tpl_dir, "draft_content.json")
-        if not os.path.exists(tpl_jp):
-            self._log("✗ 无效的模板草稿"); return
-        
-        try:
-            tpl_data = json.load(open(tpl_jp, encoding='utf-8'))
-            tpl_font = None
-            for t in tpl_data.get('materials', {}).get('texts', []):
-                try:
-                    c = json.loads(t.get('content', '{}'))
-                    tpl_font = c.get('styles', [{}])[0].get('font')
-                    if tpl_font: break
-                except: pass
-            if not tpl_font:
-                self._log("✗ 模板中未找到有效字体配置！"); return
-            self._log(f"✓ 成功提取模板字体: {os.path.basename(tpl_font.get('path', ''))}")
-        except Exception as e:
-            self._log(f"✗ 模板解析失败: {e}"); return
-            
         base = self.draft_dir.get()
         if not os.path.exists(base): self._log("✗ 草稿根目录不存在"); return
         
@@ -738,7 +748,7 @@ class App(ctk.CTk):
         for fn in os.listdir(base):
             fp = os.path.join(base, fn)
             jp = os.path.join(fp, 'draft_content.json')
-            if os.path.isdir(fp) and os.path.exists(jp) and fp != tpl_dir:
+            if os.path.isdir(fp) and os.path.exists(jp):
                 items.append((fn, jp))
                 
         ok = 0
