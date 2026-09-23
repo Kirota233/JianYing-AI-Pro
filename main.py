@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.5.0"
+VERSION   = "1.5.1"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -734,13 +734,34 @@ class App(ctk.CTk):
             self._ask_yes_no("安全确认", "确定执行？此操作将统一字体并解除隐藏", lambda: threading.Thread(target=self._fix_fonts, daemon=True).start())
         self._check_first_sub(_run)
 
+    def _find_noto_sans_bold(self):
+        import re
+        dirs_to_check = [
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Windows', 'Fonts'),
+            os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts')
+        ]
+        
+        for d in dirs_to_check:
+            if not os.path.exists(d): continue
+            for fn in os.listdir(d):
+                if not fn.lower().endswith(('.ttf', '.otf', '.ttc')): continue
+                clean_name = re.sub(r'[^a-z0-9]', '', fn.lower())
+                if 'notosansbold' in clean_name:
+                    return os.path.join(d, fn).replace('\\', '/')
+        return None
+
     def _fix_fonts(self):
+        font_path = self._find_noto_sans_bold()
+        if not font_path:
+            self._log("✗ 未在系统中找到 Noto Sans Bold 字体文件，请先安装该字体！")
+            self.after(0, lambda: self._show_toast("缺少字体", "未检测到 Noto Sans Bold，无法统一字体", C_DANGER, 6000))
+            return
+            
         tpl_font = {
-            "path": "C:/Users/13670/AppData/Local/Microsoft/Windows/Fonts/NotoSans-Bold (1).ttf",
+            "path": font_path,
             "id": ""
         }
-        self._log("将使用 Noto Sans Bold 作为统一字体...")
-        
+        self._log(f"找到本地匹配字体:\n  {font_path}")
         base = self.draft_dir.get()
         if not os.path.exists(base): self._log("✗ 草稿根目录不存在"); return
         
