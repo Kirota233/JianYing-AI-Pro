@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.0"
+VERSION   = "1.4.1"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -358,16 +358,25 @@ class App(ctk.CTk):
                       font=("Segoe UI", 12, "bold"), text_color="#ffffff",
                       command=self._sub_thread).pack(fill="x", pady=(0, 6))
 
-        ctk.CTkButton(btn_frame, text="🎨  统一 Noto Sans Bold & 解除隐藏", height=36,
+        btn_frame2 = ctk.CTkFrame(btn_frame, fg_color="transparent")
+        btn_frame2.pack(fill="x")
+        
+        ctk.CTkButton(btn_frame2, text="🎨 统一字体 (Noto Sans Bold)", height=36,
                       corner_radius=8, fg_color=C_PRIMARY, hover_color="#2563eb",
                       font=("Segoe UI", 12, "bold"), text_color="#ffffff",
-                      command=self._fix_font_thread).pack(fill="x")
+                      command=self._fix_font_thread).pack(side="left", fill="x", expand=True, padx=(0, 3))
+                      
+        ctk.CTkButton(btn_frame2, text="👁️ 解除所有字幕隐藏", height=36,
+                      corner_radius=8, fg_color="#10b981", hover_color="#059669",
+                      font=("Segoe UI", 12, "bold"), text_color="#ffffff",
+                      command=self._unhide_tracks_thread).pack(side="right", fill="x", expand=True, padx=(3, 0))
         
         # 说明
         info_card = self._card(tab)
         info_card.pack(fill="x", padx=4)
         for t in ["提取文本为 SRT 格式，并彻底删除原草稿字幕轨道",
-                   "强制将所有草稿的字幕统一为 Noto Sans Bold 并显示"]:
+                   "统一字体：无差别替换所有草稿字体为 Noto Sans Bold",
+                   "解除隐藏：恢复所有被隐藏(闭眼)的字幕轨道显示"]:
             ctk.CTkLabel(info_card, text=f"·  {t}", font=("Segoe UI", 11),
                          text_color=C_MUTED, anchor="w").pack(fill="x", padx=8, pady=2)
 
@@ -466,9 +475,16 @@ class App(ctk.CTk):
         
         ctk.CTkLabel(card, text="Gemini API Key", font=("Segoe UI", 13, "bold"),
                      text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(8,0))
-        ctk.CTkLabel(card, text="默认为作者公用 Key，有速率限制\n建议到 aistudio.google.com 免费申请",
+        row1 = ctk.CTkFrame(card, fg_color="transparent")
+        row1.pack(fill="x", padx=8, pady=(4, 8))
+        ctk.CTkLabel(row1, text="默认为作者公用Key，有速率限制\n强烈建议使用自己的Key以保证稳定：",
                      font=("Segoe UI", 11), text_color=C_WARN, anchor="w",
-                     justify="left").pack(fill="x", padx=8, pady=(4, 8))
+                     justify="left").pack(side="left")
+        import webbrowser
+        ctk.CTkButton(row1, text="获取 API Key", width=80, height=26, corner_radius=6,
+                      fg_color="#3b82f6", font=("Segoe UI", 11, "bold"), text_color="white",
+                      command=lambda: webbrowser.open("https://aistudio.google.com/api-keys")
+                      ).pack(side="right")
         
         self.key_entry = ctk.CTkEntry(card, show="•", corner_radius=6,
                                        border_color=C_BORDER, height=32)
@@ -750,6 +766,38 @@ class App(ctk.CTk):
                     return os.path.join(d, fn).replace('\\', '/')
         return None
 
+    def _unhide_tracks_thread(self):
+        def _run():
+            self._ask_yes_no("安全确认", "确定执行？此操作将解除所有草稿的字幕隐藏", lambda: threading.Thread(target=self._unhide_tracks, daemon=True).start())
+        self._check_first_sub(_run)
+
+    def _unhide_tracks(self):
+        base = self.draft_dir.get()
+        if not os.path.exists(base): self._log("✗ 草稿根目录不存在"); return
+        items = []
+        for fn in os.listdir(base):
+            fp = os.path.join(base, fn)
+            jp = os.path.join(fp, 'draft_content.json')
+            if os.path.isdir(fp) and os.path.exists(jp):
+                items.append((fn, jp))
+        ok = 0
+        for fn, jp in items:
+            try:
+                data = json.load(open(jp, encoding='utf-8'))
+                for t in data.get('tracks', []):
+                    if t.get('type') == 'text':
+                        if 'attribute' in t: t.pop('attribute')
+                json.dump(data, open(jp, 'w', encoding='utf-8'), ensure_ascii=False)
+                bak_path = jp + ".bak"
+                if os.path.exists(bak_path):
+                    json.dump(data, open(bak_path, 'w', encoding='utf-8'), ensure_ascii=False)
+                self._log(f"  ✓ {fn} 已解除隐藏")
+                ok += 1
+            except Exception as e:
+                self._log(f"  ✗ {fn} 失败: {e}")
+        self._log(f"完成，共解除隐藏 {ok} 个草稿")
+        self._show_toast("处理完成", f"成功解除 {ok} 个草稿的隐藏状态", C_SUCCESS)
+
     def _fix_fonts(self):
         font_path = self._find_noto_sans_bold()
         if not font_path:
@@ -761,7 +809,7 @@ class App(ctk.CTk):
             "path": font_path,
             "id": ""
         }
-        self._log(f"找到本地匹配字体:\n  {font_path}")
+        self._log(f"将强制所有草稿使用系统匹配字体:\n  {font_path}")
         base = self.draft_dir.get()
         if not os.path.exists(base): self._log("✗ 草稿根目录不存在"); return
         
@@ -776,15 +824,6 @@ class App(ctk.CTk):
         for fn, jp in items:
             try:
                 data = json.load(open(jp, encoding='utf-8'))
-                changed = False
-                
-                # 解除隐藏 (删除 attribute 字段)
-                for t in data.get('tracks', []):
-                    if t.get('type') == 'text' and 'attribute' in t:
-                        t.pop('attribute')
-                        changed = True
-                        
-                # 替换字体
                 for t in data.get('materials', {}).get('texts', []):
                     try:
                         c = json.loads(t.get('content', '{}'))
@@ -792,21 +831,18 @@ class App(ctk.CTk):
                         if styles:
                             styles[0]['font'] = tpl_font
                             t['content'] = json.dumps(c, ensure_ascii=False)
-                            changed = True
                     except: pass
-                    
-                if changed:
-                    json.dump(data, open(jp, 'w', encoding='utf-8'), ensure_ascii=False)
-                    bak_path = jp + ".bak"
-                    if os.path.exists(bak_path):
-                        json.dump(data, open(bak_path, 'w', encoding='utf-8'), ensure_ascii=False)
-                    self._log(f"  ✓ {fn} 已修复并解除隐藏")
-                    ok += 1
+                json.dump(data, open(jp, 'w', encoding='utf-8'), ensure_ascii=False)
+                bak_path = jp + ".bak"
+                if os.path.exists(bak_path):
+                    json.dump(data, open(bak_path, 'w', encoding='utf-8'), ensure_ascii=False)
+                self._log(f"  ✓ {fn} 字体已统一")
+                ok += 1
             except Exception as e:
                 self._log(f"  ✗ {fn} 失败: {e}")
                 
-        self._log(f"完成，共修复 {ok} 个草稿")
-        self._show_toast("修复完成", f"成功统一 {ok} 个草稿的字体并解除隐藏", C_SUCCESS)
+        self._log(f"完成，共处理 {ok} 个草稿")
+        self._show_toast("处理完成", f"成功统一 {ok} 个草稿的字体", C_SUCCESS)
 
     def _extract_subs(self):
         self._log("提取字幕...")
