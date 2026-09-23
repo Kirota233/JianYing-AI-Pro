@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.3.1"
+VERSION   = "1.4.0"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -54,9 +54,20 @@ class App(ctk.CTk):
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry(f"+{sw-540}+{sh-580}")
         
+        # 默认推荐坐标 (基于 2560x1440)
+        self.default_res = (2560, 1440)
+        self.default_coords = {"export": [2420, 19], "confirm": [1468, 1028], "popup_close": [1548, 951], "draft_close": [2538, 18]}
+        self.default_color = (99, 149, 200)
+        
         # 数据
-        self.coords = {"export": None, "confirm": None, "popup_close": None, "draft_close": None}
-        self.close_color = None
+        self.sys_res = pyautogui.size()
+        if self.sys_res == self.default_res:
+            self.coords = self.default_coords.copy()
+            self.close_color = self.default_color
+        else:
+            self.coords = {"export": None, "confirm": None, "popup_close": None, "draft_close": None}
+            self.close_color = None
+            
         self.stop_flag = False
         self.rec_state = None
         self.api_key = DEFAULT_KEY
@@ -167,6 +178,10 @@ class App(ctk.CTk):
         if self.first_run:
             self.first_run = False
             self._save_cfg()
+            
+            if self.sys_res == self.default_res:
+                self.after(500, lambda: self._show_toast("✅ 坐标已自动适配", "检测到您的分辨率与默认配置匹配\n已自动为您填入推荐坐标，无需再次录制！", C_SUCCESS, 6000))
+                
             msg = (
                 "1. 请不要把本程序窗口遮挡住剪映的草稿封面\n"
                 "2. 草稿必须从云空间下载，且绝对不能打开过\n"
@@ -182,8 +197,13 @@ class App(ctk.CTk):
         if os.path.exists(CFG_FILE):
             try:
                 d = json.load(open(CFG_FILE))
-                self.coords = d.get("coords", self.coords)
-                self.close_color = tuple(d["color"]) if d.get("color") else None
+                loaded_coords = d.get("coords")
+                if loaded_coords and loaded_coords.get("export"):
+                    self.coords = loaded_coords
+                
+                loaded_color = d.get("color")
+                if loaded_color:
+                    self.close_color = tuple(loaded_color)
                 self.api_key = d.get("api_key", DEFAULT_KEY)
                 self.first_run = d.get("first_run", True)
             except: pass
@@ -328,17 +348,24 @@ class App(ctk.CTk):
                       fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
                       command=self._browse_dir).pack(side="right")
 
-        ctk.CTkButton(tab, text="📥  提取字幕 & 删除轨道 → 桌面/srt", height=40,
+        btn_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=4, pady=10)
+        
+        ctk.CTkButton(btn_frame, text="📥  提取字幕 & 删除轨道 → 桌面/srt", height=36,
                       corner_radius=8, fg_color=C_WARN, hover_color="#d97706",
                       font=("Segoe UI", 12, "bold"), text_color="#ffffff",
-                      command=self._sub_thread).pack(fill="x", padx=4, pady=10)
+                      command=self._sub_thread).pack(fill="x", pady=(0, 6))
+
+        ctk.CTkButton(btn_frame, text="🎨  应用模板字体 & 解除字幕隐藏", height=36,
+                      corner_radius=8, fg_color=C_PRIMARY, hover_color="#2563eb",
+                      font=("Segoe UI", 12, "bold"), text_color="#ffffff",
+                      command=self._fix_font_thread).pack(fill="x")
         
         # 说明
         info_card = self._card(tab)
         info_card.pack(fill="x", padx=4)
-        for t in ["提取 draft_content.json 中的文本为 SRT 格式",
-                   "设置文本轨道 flag=2 实现无字幕版",
-                   "按集数命名保存到 桌面/srt 文件夹"]:
+        for t in ["提取文本为 SRT 格式，并彻底删除原草稿字幕轨道",
+                   "修复字体可从选定草稿提取正确字体并覆盖所有草稿"]:
             ctk.CTkLabel(info_card, text=f"·  {t}", font=("Segoe UI", 11),
                          text_color=C_MUTED, anchor="w").pack(fill="x", padx=8, pady=2)
 
@@ -401,6 +428,21 @@ class App(ctk.CTk):
                                       font=("Segoe UI", 12, "bold"), state="disabled",
                                       command=self._exec_rename)
         self.ren_btn.pack(fill="x", padx=4, pady=6)
+        
+        # 注册拖放支持
+        try:
+            import windnd
+            def _on_drop(files):
+                paths = [f.decode('gbk') if isinstance(f, bytes) else f for f in files]
+                valid = [p for p in paths if p.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.srt', '.ass'))]
+                if valid:
+                    self.sel_files = list(set(self.sel_files + valid))
+                    self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
+                    self.ren_btn.configure(state="disabled")
+                    for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
+            windnd.hook_dropfiles(self.winfo_id(), func=_on_drop)
+        except Exception:
+            pass
 
     def _sel_vids(self):
         f = filedialog.askopenfilenames(
@@ -651,13 +693,89 @@ class App(ctk.CTk):
             self._log(f"\n🎉 全部完成！共导出 {n} 个")
             self.status.configure(text=f"完成 {n} 个")
         except Exception as e:
-            self._log(f"\n⏸ {e}")
+            err = str(e)
+            if "用户中断" not in err:
+                self.after(0, lambda: self._show_toast("导出异常终止", f"发生错误: {err[:50]}", C_DANGER, 6000))
+            self._log(f"\n⏸ {err}")
         finally:
             self.after(0, lambda: self.start_btn.configure(state="normal"))
 
     # ═══════════════════════ 字幕提取 ═══════════════════════
     def _sub_thread(self):
         self._ask_yes_no("安全确认", "草稿是否全部来自云空间\n且未双击打开过？", lambda: threading.Thread(target=self._extract_subs, daemon=True).start())
+
+    def _fix_font_thread(self):
+        self._ask_yes_no("安全确认", "此操作将修改目录下所有草稿的字体并解除隐藏，请确保未在剪映中打开。是否继续？", lambda: threading.Thread(target=self._fix_fonts, daemon=True).start())
+
+    def _fix_fonts(self):
+        self._log("请选择作为模板的【正确字体】草稿文件夹...")
+        tpl_dir = filedialog.askdirectory(title="选择模板草稿 (例如: 龙骸契约37)")
+        if not tpl_dir: self._log("✗ 已取消"); return
+        
+        tpl_jp = os.path.join(tpl_dir, "draft_content.json")
+        if not os.path.exists(tpl_jp):
+            self._log("✗ 无效的模板草稿"); return
+        
+        try:
+            tpl_data = json.load(open(tpl_jp, encoding='utf-8'))
+            tpl_font = None
+            for t in tpl_data.get('materials', {}).get('texts', []):
+                try:
+                    c = json.loads(t.get('content', '{}'))
+                    tpl_font = c.get('styles', [{}])[0].get('font')
+                    if tpl_font: break
+                except: pass
+            if not tpl_font:
+                self._log("✗ 模板中未找到有效字体配置！"); return
+            self._log(f"✓ 成功提取模板字体: {os.path.basename(tpl_font.get('path', ''))}")
+        except Exception as e:
+            self._log(f"✗ 模板解析失败: {e}"); return
+            
+        base = self.draft_dir.get()
+        if not os.path.exists(base): self._log("✗ 草稿根目录不存在"); return
+        
+        items = []
+        for fn in os.listdir(base):
+            fp = os.path.join(base, fn)
+            jp = os.path.join(fp, 'draft_content.json')
+            if os.path.isdir(fp) and os.path.exists(jp) and fp != tpl_dir:
+                items.append((fn, jp))
+                
+        ok = 0
+        for fn, jp in items:
+            try:
+                data = json.load(open(jp, encoding='utf-8'))
+                changed = False
+                
+                # 解除隐藏 (删除 attribute 字段)
+                for t in data.get('tracks', []):
+                    if t.get('type') == 'text' and 'attribute' in t:
+                        t.pop('attribute')
+                        changed = True
+                        
+                # 替换字体
+                for t in data.get('materials', {}).get('texts', []):
+                    try:
+                        c = json.loads(t.get('content', '{}'))
+                        styles = c.get('styles', [])
+                        if styles:
+                            styles[0]['font'] = tpl_font
+                            t['content'] = json.dumps(c, ensure_ascii=False)
+                            changed = True
+                    except: pass
+                    
+                if changed:
+                    json.dump(data, open(jp, 'w', encoding='utf-8'), ensure_ascii=False)
+                    bak_path = jp + ".bak"
+                    if os.path.exists(bak_path):
+                        json.dump(data, open(bak_path, 'w', encoding='utf-8'), ensure_ascii=False)
+                    self._log(f"  ✓ {fn} 已修复并解除隐藏")
+                    ok += 1
+            except Exception as e:
+                self._log(f"  ✗ {fn} 失败: {e}")
+                
+        self._log(f"完成，共修复 {ok} 个草稿")
+        self._show_toast("修复完成", f"成功统一 {ok} 个草稿的字体并解除隐藏", C_SUCCESS)
 
     def _extract_subs(self):
         self._log("提取字幕...")
@@ -751,9 +869,16 @@ class App(ctk.CTk):
             data = json.loads(t.strip())
             self.after(0, self._fill_ren, data)
         except Exception as e: 
-            err_msg = str(e)
-            self._log(f"✗ {err_msg}")
-            self.after(0, lambda: self._show_toast("AI 重命名失败", err_msg[:60], C_DANGER))
+            err = str(e)
+            msg = f"发生错误: {err[:50]}"
+            if "403" in err: msg = "API Key 无效、无权限或未开启代理(403)"
+            elif "400" in err: msg = "请求参数错误或被拒绝(400)"
+            elif "500" in err: msg = "Gemini 服务器内部错误(500)"
+            elif "closed" in err: msg = "网络连接被强行关闭 (请检查代理是否稳定)"
+            elif "timeout" in err.lower(): msg = "网络请求超时 (请检查代理是否可用)"
+            
+            self._log(f"✗ {err}")
+            self.after(0, lambda m=msg: self._show_toast("AI 重命名失败", m, C_DANGER, 6000))
             self.after(0, self._reset_ren_ui)
 
     def _reset_ren_ui(self):
