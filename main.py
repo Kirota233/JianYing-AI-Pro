@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.1"
+VERSION   = "1.4.2"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -196,7 +196,8 @@ class App(ctk.CTk):
     def _load_cfg(self):
         if os.path.exists(CFG_FILE):
             try:
-                d = json.load(open(CFG_FILE))
+                with open(CFG_FILE, 'r', encoding='utf-8') as f:
+                    d = json.load(f)
                 loaded_coords = d.get("coords")
                 if loaded_coords and loaded_coords.get("export"):
                     self.coords = loaded_coords
@@ -210,11 +211,13 @@ class App(ctk.CTk):
             except: pass
 
     def _save_cfg(self):
-        json.dump({"coords": self.coords, "color": self.close_color,
-                    "api_key": self.key_entry.get().strip(),
-                    "first_run": self.first_run,
-                    "first_sub": getattr(self, 'first_sub', True)},
-                   open(CFG_FILE, "w"))
+        try:
+            with open(CFG_FILE, "w", encoding='utf-8') as f:
+                json.dump({"coords": self.coords, "color": self.close_color,
+                        "api_key": self.key_entry.get().strip(),
+                        "first_run": self.first_run,
+                        "first_sub": getattr(self, 'first_sub', True)}, f)
+        except: pass
 
     # ═══════════════════════ UI 构建 ═══════════════════════
     def _build_ui(self):
@@ -783,20 +786,23 @@ class App(ctk.CTk):
         ok = 0
         for fn, jp in items:
             try:
-                data = json.load(open(jp, encoding='utf-8'))
+                with open(jp, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
                 for t in data.get('tracks', []):
                     if t.get('type') == 'text':
-                        if 'attribute' in t: t.pop('attribute')
-                json.dump(data, open(jp, 'w', encoding='utf-8'), ensure_ascii=False)
+                        t['attribute'] = 0
+                with open(jp, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False)
                 bak_path = jp + ".bak"
                 if os.path.exists(bak_path):
-                    json.dump(data, open(bak_path, 'w', encoding='utf-8'), ensure_ascii=False)
+                    with open(bak_path, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False)
                 self._log(f"  ✓ {fn} 已解除隐藏")
                 ok += 1
             except Exception as e:
                 self._log(f"  ✗ {fn} 失败: {e}")
         self._log(f"完成，共解除隐藏 {ok} 个草稿")
-        self._show_toast("处理完成", f"成功解除 {ok} 个草稿的隐藏状态", C_SUCCESS)
+        self.after(0, lambda: self._show_toast("处理完成", f"成功解除 {ok} 个草稿的隐藏状态", C_SUCCESS, 6000))
 
     def _fix_fonts(self):
         font_path = self._find_noto_sans_bold()
@@ -823,7 +829,8 @@ class App(ctk.CTk):
         ok = 0
         for fn, jp in items:
             try:
-                data = json.load(open(jp, encoding='utf-8'))
+                with open(jp, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
                 for t in data.get('materials', {}).get('texts', []):
                     try:
                         c = json.loads(t.get('content', '{}'))
@@ -832,17 +839,19 @@ class App(ctk.CTk):
                             styles[0]['font'] = tpl_font
                             t['content'] = json.dumps(c, ensure_ascii=False)
                     except: pass
-                json.dump(data, open(jp, 'w', encoding='utf-8'), ensure_ascii=False)
+                with open(jp, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False)
                 bak_path = jp + ".bak"
                 if os.path.exists(bak_path):
-                    json.dump(data, open(bak_path, 'w', encoding='utf-8'), ensure_ascii=False)
+                    with open(bak_path, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False)
                 self._log(f"  ✓ {fn} 字体已统一")
                 ok += 1
             except Exception as e:
                 self._log(f"  ✗ {fn} 失败: {e}")
                 
         self._log(f"完成，共处理 {ok} 个草稿")
-        self._show_toast("处理完成", f"成功统一 {ok} 个草稿的字体", C_SUCCESS)
+        self.after(0, lambda: self._show_toast("处理完成", f"成功统一 {ok} 个草稿字体\n使用: {font_path}", C_SUCCESS, 6000))
 
     def _extract_subs(self):
         self._log("提取字幕...")
@@ -862,7 +871,8 @@ class App(ctk.CTk):
         ok = 0
         for d in items:
             try:
-                data = json.load(open(d["jp"], encoding='utf-8'))
+                with open(d["jp"], 'r', encoding='utf-8') as f:
+                    data = json.load(f)
                 td = {t['id']: t for t in data.get('materials', {}).get('texts', [])}
                 tracks = data.get('tracks', [])
                 text_tracks = [t for t in tracks if t.get('type') == 'text']
@@ -887,7 +897,8 @@ class App(ctk.CTk):
                 if lines:
                     # 命名为原草稿文件夹名
                     sp = os.path.join(out, f"{d['fn']}.srt")
-                    open(sp, 'w', encoding='utf-8').write("\n".join(lines))
+                    with open(sp, 'w', encoding='utf-8') as f:
+                        f.write("\n".join(lines))
                     
                     # 彻底删除字幕轨道
                     data['tracks'] = [t for t in tracks if t.get('type') != 'text']
@@ -897,18 +908,20 @@ class App(ctk.CTk):
                         data['materials']['texts'] = []
                         
                     # 保存主配置
-                    json.dump(data, open(d["jp"], 'w', encoding='utf-8'), ensure_ascii=False)
+                    with open(d["jp"], 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False)
                     
                     # 同步覆盖 .bak 文件，防止剪映自动恢复
                     bak_path = d["jp"] + ".bak"
                     if os.path.exists(bak_path):
-                        json.dump(data, open(bak_path, 'w', encoding='utf-8'), ensure_ascii=False)
+                        with open(bak_path, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, ensure_ascii=False)
                     
                     self._log(f"  ✓ {d['fn']} → {os.path.basename(sp)}")
                     ok += 1
             except Exception as e: self._log(f"  ✗ {d['fn']}: {e}")
         self._log(f"完成，提取并删除字幕 {ok} 个")
-        self._show_toast("提取完成", f"共处理 {ok} 个草稿\n字幕已保存至桌面/srt", C_SUCCESS)
+        self.after(0, lambda: self._show_toast("提取完成", f"共处理 {ok} 个草稿\n字幕已保存至桌面/srt", C_SUCCESS, 6000))
 
     # ═══════════════════════ 重命名 ═══════════════════════
     def _ren_preview_thread(self):
