@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.6"
+VERSION   = "1.4.7"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -558,9 +558,10 @@ class App(ctk.CTk):
                 self.coords[self.rec_state] = (x, y)
                 if self.rec_state == "popup_close":
                     r, g, b = pyautogui.pixel(x, y)
-                    if (r > 200 and g > 200 and b > 200) or (r < 20 and g < 20 and b < 20):
-                        self._log(f"  ⚠️ 取色失败 RGB({r},{g},{b})：请放在按钮的【绿色背景】上，不要指着文字！")
-                        self.after(0, lambda: self._show_toast("重新录制", "请避开白色文字，指着绿色背景按F8", C_WARN, 4000))
+                    is_dark_green = (r < 80 and g > r + 15 and b > r + 15)
+                    if (r > 200 and g > 200 and b > 200) or (r < 20 and g < 20 and b < 20) or is_dark_green:
+                        self._log(f"  ⚠️ 取色失败 RGB({r},{g},{b})：请等待按钮变成亮色后再指着绿色背景按F8！")
+                        self.after(0, lambda: self._show_toast("重新录制", "请等待按钮变亮，且避开白色文字按F8", C_WARN, 4000))
                         return
                     self.close_color = (r, g, b)
                     self._log(f"  ✓ 弹窗/返回 ({x},{y}) RGB({r},{g},{b})")
@@ -704,9 +705,10 @@ class App(ctk.CTk):
                 # If any nearby pixel is Bright Cyan (Fold to Home button enabled)
                 if abs(r-126)+abs(g-222)+abs(b-228) < 80:
                     done = True; break
-                # Or if it matches the recorded color, AND the recorded color is NOT white/gray text
+                # Or if it matches the recorded color, AND the recorded color is NOT white/gray text or dark green
                 is_white_or_dark = (r > 200 and g > 200 and b > 200) or (r < 20 and g < 20 and b < 20)
-                if not is_white_or_dark and abs(r-tc[0])+abs(g-tc[1])+abs(b-tc[2]) < 20:
+                is_dark_green = (r < 80 and g > r + 15 and b > r + 15)
+                if not is_white_or_dark and not is_dark_green and abs(r-tc[0])+abs(g-tc[1])+abs(b-tc[2]) < 20:
                     done = True; break
                     
             if done:
@@ -753,8 +755,8 @@ class App(ctk.CTk):
                 self._log(f"\n[{i+1}/{total}] {nm}")
                 
                 pyautogui.click(dx, dy)
-                self._log("  · 加载草稿 (10s)")
-                for _ in range(10): self._chk(); time.sleep(1)
+                self._log("  · 加载草稿 (8s)")
+                for _ in range(8): self._chk(); time.sleep(1)
                 
                 self._chk(); pyautogui.click(*self.coords['export'])
                 self._log("  · 点击导出")
