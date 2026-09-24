@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.7"
+VERSION   = "1.4.8"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -558,11 +558,6 @@ class App(ctk.CTk):
                 self.coords[self.rec_state] = (x, y)
                 if self.rec_state == "popup_close":
                     r, g, b = pyautogui.pixel(x, y)
-                    is_dark_green = (r < 80 and g > r + 15 and b > r + 15)
-                    if (r > 200 and g > 200 and b > 200) or (r < 20 and g < 20 and b < 20) or is_dark_green:
-                        self._log(f"  ⚠️ 取色失败 RGB({r},{g},{b})：请等待按钮变成亮色后再指着绿色背景按F8！")
-                        self.after(0, lambda: self._show_toast("重新录制", "请等待按钮变亮，且避开白色文字按F8", C_WARN, 4000))
-                        return
                     self.close_color = (r, g, b)
                     self._log(f"  ✓ 弹窗/返回 ({x},{y}) RGB({r},{g},{b})")
                 else:
@@ -707,7 +702,7 @@ class App(ctk.CTk):
                     done = True; break
                 # Or if it matches the recorded color, AND the recorded color is NOT white/gray text or dark green
                 is_white_or_dark = (r > 200 and g > 200 and b > 200) or (r < 20 and g < 20 and b < 20)
-                is_dark_green = (r < 80 and g > r + 15 and b > r + 15)
+                is_dark_green = (r < 80 and g > r + 10 and b > r + 10)
                 if not is_white_or_dark and not is_dark_green and abs(r-tc[0])+abs(g-tc[1])+abs(b-tc[2]) < 20:
                     done = True; break
                     
