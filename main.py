@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.4"
+VERSION   = "1.4.5"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -558,6 +558,10 @@ class App(ctk.CTk):
                 self.coords[self.rec_state] = (x, y)
                 if self.rec_state == "popup_close":
                     r, g, b = pyautogui.pixel(x, y)
+                    if (r > 200 and g > 200 and b > 200) or (r < 50 and g < 50 and b < 50):
+                        self._log(f"  ⚠️ 取色失败 RGB({r},{g},{b})：请放在按钮的【绿色背景】上，不要指着文字！")
+                        self.after(0, lambda: self._show_toast("重新录制", "请避开白色文字，指着绿色背景按F8", C_WARN, 4000))
+                        return
                     self.close_color = (r, g, b)
                     self._log(f"  ✓ 弹窗/返回 ({x},{y}) RGB({r},{g},{b})")
                 else:
@@ -694,7 +698,7 @@ class App(ctk.CTk):
         self._log("  · 等待导出完成...")
         while not self.stop_flag:
             r, g, b = pyautogui.pixel(x, y)
-            if abs(r-tc[0])+abs(g-tc[1])+abs(b-tc[2]) < 30:
+            if abs(r-tc[0])+abs(g-tc[1])+abs(b-tc[2]) < 20:
                 self._log("  ✓ 导出完成"); break
             time.sleep(2)
 
