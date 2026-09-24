@@ -27,7 +27,7 @@ jobs:
         
     - name: Build EXE with PyInstaller
       run: |
-        pyinstaller --noconsole --onefile --name JianYing-AI-Pro main.py
+        pyinstaller --noconsole --onefile --add-data "btn_bright.png;." --name JianYing-AI-Pro main.py
         
     - name: Release
       uses: softprops/action-gh-release@v2
