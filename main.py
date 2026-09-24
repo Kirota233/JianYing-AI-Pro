@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.5.0"
+VERSION   = "1.5.1"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -690,24 +690,41 @@ class App(ctk.CTk):
         for _ in range(5):
             if self.stop_flag: return
             time.sleep(1)
-        # 亮色目标 (126,222,228)  暗色干扰 (39,66,68)
-        BRIGHT = (126, 222, 228)
-        DARK   = (39, 66, 68)
         # 轮询像素直到按钮变亮
         self._log("  · 等待导出完成...")
         while not self.stop_flag:
-            r, g, b = pyautogui.pixel(x, y)
-            # 计算与亮色和暗色的曼哈顿距离
-            dist_bright = abs(r - BRIGHT[0]) + abs(g - BRIGHT[1]) + abs(b - BRIGHT[2])
-            dist_dark   = abs(r - DARK[0])   + abs(g - DARK[1])   + abs(b - DARK[2])
-            # 也检查与用户录入颜色的距离（兼容关闭弹窗等非返回首页的场景）
-            dist_user   = abs(r - tc[0]) + abs(g - tc[1]) + abs(b - tc[2])
-            # 条件：像素接近亮色，或者接近用户录入色且远离暗色
-            if dist_bright < 80:
-                self._log(f"  ✓ 导出完成 (亮色匹配 d={dist_bright})"); break
-            if dist_user < 30 and dist_dark > 60:
-                self._log(f"  ✓ 导出完成 (录入色匹配 d={dist_user})"); break
+            if self._btn_is_ready(x, y, tc):
+                # 二次确认：等 3 秒后再检测一次，防止过渡态误判
+                self._log("  · 检测到亮色，确认中 (3s)...")
+                time.sleep(3)
+                if self.stop_flag: return
+                if self._btn_is_ready(x, y, tc):
+                    self._log("  ✓ 导出完成"); break
+                else:
+                    self._log("  · 误判，继续等待...")
             time.sleep(2)
+
+    def _btn_is_ready(self, x, y, tc):
+        """采样按钮周围像素，跳过白色文字，判断背景是亮色还是暗色"""
+        BRIGHT = (126, 222, 228)  # 收起至首页-可点击
+        DARK   = (39,  66,  68)   # 收起至首页-不可点击
+        for ox, oy in [(0, 0), (-20, 0), (20, 0), (0, -10), (0, 10)]:
+            try: r, g, b = pyautogui.pixel(x + ox, y + oy)
+            except: continue
+            # 跳过白色文字和纯黑阴影
+            if (r > 210 and g > 210 and b > 210): continue
+            if (r < 15  and g < 15  and b < 15):  continue
+            # 计算与亮色和暗色的距离
+            dist_b = abs(r-BRIGHT[0]) + abs(g-BRIGHT[1]) + abs(b-BRIGHT[2])
+            dist_d = abs(r-DARK[0])   + abs(g-DARK[1])   + abs(b-DARK[2])
+            # 明确更接近亮色 → 可以点击
+            if dist_b < 100 and dist_b < dist_d:
+                return True
+            # 兼容非青色按钮（关闭弹窗 X 等）：匹配用户录入色且远离暗色
+            dist_u = abs(r-tc[0]) + abs(g-tc[1]) + abs(b-tc[2])
+            if dist_u < 30 and dist_d > 100:
+                return True
+        return False
 
     def _start_export(self):
         req_coords = [self.coords["export"], self.coords["confirm"], self.coords["popup_close"]]
