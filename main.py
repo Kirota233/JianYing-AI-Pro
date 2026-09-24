@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.9"
+VERSION   = "1.4.10"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -848,17 +848,20 @@ class App(ctk.CTk):
             try:
                 with open(jp, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                changed = False
                 for t in data.get('tracks', []):
-                    if t.get('type') == 'text':
-                        t['attribute'] = 0
-                with open(jp, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False)
-                bak_path = jp + ".bak"
-                if os.path.exists(bak_path):
-                    with open(bak_path, 'w', encoding='utf-8') as f:
+                    if t.get('type') == 'text' and 'attribute' in t:
+                        t.pop('attribute')
+                        changed = True
+                if changed:
+                    with open(jp, 'w', encoding='utf-8') as f:
                         json.dump(data, f, ensure_ascii=False)
-                self._log(f"  ✓ {fn} 已解除隐藏")
-                ok += 1
+                    bak_path = jp + ".bak"
+                    if os.path.exists(bak_path):
+                        with open(bak_path, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, ensure_ascii=False)
+                    self._log(f"  ✓ {fn} 已解除隐藏")
+                    ok += 1
             except Exception as e:
                 self._log(f"  ✗ {fn} 失败: {e}")
         self._log(f"完成，共解除隐藏 {ok} 个草稿")
@@ -891,6 +894,7 @@ class App(ctk.CTk):
             try:
                 with open(jp, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                changed = False
                 for t in data.get('materials', {}).get('texts', []):
                     try:
                         c = json.loads(t.get('content', '{}'))
@@ -898,15 +902,17 @@ class App(ctk.CTk):
                         if styles:
                             styles[0]['font'] = tpl_font
                             t['content'] = json.dumps(c, ensure_ascii=False)
+                            changed = True
                     except: pass
-                with open(jp, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False)
-                bak_path = jp + ".bak"
-                if os.path.exists(bak_path):
-                    with open(bak_path, 'w', encoding='utf-8') as f:
+                if changed:
+                    with open(jp, 'w', encoding='utf-8') as f:
                         json.dump(data, f, ensure_ascii=False)
-                self._log(f"  ✓ {fn} 字体已统一")
-                ok += 1
+                    bak_path = jp + ".bak"
+                    if os.path.exists(bak_path):
+                        with open(bak_path, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, ensure_ascii=False)
+                    self._log(f"  ✓ {fn} 字体已统一")
+                    ok += 1
             except Exception as e:
                 self._log(f"  ✗ {fn} 失败: {e}")
                 
