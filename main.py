@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.8"
+VERSION   = "1.4.9"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -558,6 +558,11 @@ class App(ctk.CTk):
                 self.coords[self.rec_state] = (x, y)
                 if self.rec_state == "popup_close":
                     r, g, b = pyautogui.pixel(x, y)
+                    is_dark_green = (r < 80 and g > r + 10 and b > r + 10)
+                    if (r > 200 and g > 200 and b > 200) or (r < 20 and g < 20 and b < 20) or is_dark_green:
+                        self._log(f"  ⚠️ 取色失败 RGB({r},{g},{b})：请等待按钮变成亮色后再指着绿色背景按F8！")
+                        self.after(0, lambda: self._show_toast("重新录制", "请等待按钮变亮，且避开文字按F8", C_WARN, 4000))
+                        return
                     self.close_color = (r, g, b)
                     self._log(f"  ✓ 弹窗/返回 ({x},{y}) RGB({r},{g},{b})")
                 else:
@@ -571,7 +576,7 @@ class App(ctk.CTk):
     def _next_rec(self):
         flow = {
             "export":      ("confirm",     "2/4 点导出→鼠标在【确认导出】上→F8"),
-            "confirm":     ("popup_close", "3/4 鼠标在【返回首页】或【关闭】上→F8"),
+            "confirm":     ("popup_close", "3/4 指在【收起至首页(亮起后)】或【关闭】的背景→F8"),
             "popup_close": ("draft_close", "4/4 鼠标在【关闭草稿】上→F8 (若刚点了返回首页, 按F9跳过)"),
             "draft_close": (None,          "● 坐标已就绪"),
         }
@@ -697,10 +702,7 @@ class App(ctk.CTk):
             colors = [pyautogui.pixel(x, y), pyautogui.pixel(x, y-10), pyautogui.pixel(x, y+10), pyautogui.pixel(x-20, y)]
             done = False
             for r, g, b in colors:
-                # If any nearby pixel is Bright Cyan (Fold to Home button enabled)
-                if abs(r-126)+abs(g-222)+abs(b-228) < 80:
-                    done = True; break
-                # Or if it matches the recorded color, AND the recorded color is NOT white/gray text or dark green
+                # 严格按照用户取色的颜色匹配，拒绝纯白字/纯黑/暗色干扰
                 is_white_or_dark = (r > 200 and g > 200 and b > 200) or (r < 20 and g < 20 and b < 20)
                 is_dark_green = (r < 80 and g > r + 10 and b > r + 10)
                 if not is_white_or_dark and not is_dark_green and abs(r-tc[0])+abs(g-tc[1])+abs(b-tc[2]) < 20:
