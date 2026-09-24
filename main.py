@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.2"
+VERSION   = "1.4.3"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -654,7 +654,8 @@ class App(ctk.CTk):
             time.sleep(2)
 
     def _start_export(self):
-        if None in self.coords.values():
+        req_coords = [self.coords["export"], self.coords["confirm"], self.coords["popup_close"]]
+        if None in req_coords:
             self._show_toast("未就绪", "请先完成坐标录制", C_WARN); return
         if not self.drafts:
             self._show_toast("未就绪", "请先 AI 扫描首页", C_WARN); return
