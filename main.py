@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.3"
+VERSION   = "1.4.4"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -71,6 +71,7 @@ class App(ctk.CTk):
         self.stop_flag = False
         self.rec_state = None
         self.api_key = DEFAULT_KEY
+        self.api_model = "gemini-3.5-flash"
         self.drafts = []          
         self.sel_files = []
         self.rename_map = []
@@ -208,15 +209,18 @@ class App(ctk.CTk):
                 self.api_key = d.get("api_key", DEFAULT_KEY)
                 self.first_run = d.get("first_run", True)
                 self.first_sub = d.get("first_sub", True)
+                self.api_model = d.get("api_model", "gemini-3.5-flash")
             except: pass
 
     def _save_cfg(self):
         try:
+            if hasattr(self, 'model_combo'): self.api_model = self.model_combo.get()
             with open(CFG_FILE, "w", encoding='utf-8') as f:
                 json.dump({"coords": self.coords, "color": self.close_color,
                         "api_key": self.key_entry.get().strip(),
                         "first_run": self.first_run,
-                        "first_sub": getattr(self, 'first_sub', True)}, f)
+                        "first_sub": getattr(self, 'first_sub', True),
+                        "api_model": getattr(self, 'api_model', "gemini-3.5-flash")}, f)
         except: pass
 
     # ═══════════════════════ UI 构建 ═══════════════════════
@@ -382,6 +386,14 @@ class App(ctk.CTk):
                    "解除隐藏：恢复所有被隐藏(闭眼)的字幕轨道显示"]:
             ctk.CTkLabel(info_card, text=f"·  {t}", font=("Segoe UI", 11),
                          text_color=C_MUTED, anchor="w").pack(fill="x", padx=8, pady=2)
+                         
+        card_log = self._card(tab)
+        card_log.pack(fill="both", expand=True, padx=4, pady=(6, 2))
+        self.sub_log = ctk.CTkTextbox(card_log, height=60, corner_radius=6, font=("Consolas", 10),
+                                   fg_color=C_LOG_BG, text_color=C_TEXT, border_width=1,
+                                   border_color=C_BORDER, state="disabled", wrap="word")
+        self.sub_log.pack(fill="both", expand=True, padx=4, pady=4)
+        sys.stdout = self._LogWriter(self.log, self.sub_log) if hasattr(self, 'log') else sys.stdout
 
     def _browse_dir(self):
         d = filedialog.askdirectory(initialdir=self.draft_dir.get())
@@ -494,6 +506,15 @@ class App(ctk.CTk):
         self.key_entry.insert(0, self.api_key)
         self.key_entry.pack(fill="x", padx=8, pady=(0, 8))
         
+        row_model = ctk.CTkFrame(card, fg_color="transparent")
+        row_model.pack(fill="x", padx=8, pady=(4, 12))
+        ctk.CTkLabel(row_model, text="使用的模型:", font=("Segoe UI", 12, "bold"), text_color=C_TEXT).pack(side="left")
+        
+        models = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3-flash", "gemini-3.7-flash", "gemini-3.8-flash"]
+        self.model_combo = ctk.CTkComboBox(row_model, values=models, width=180, corner_radius=6, border_color=C_BORDER, button_color=C_BORDER)
+        self.model_combo.set(self.api_model if self.api_model in models else "gemini-3.5-flash")
+        self.model_combo.pack(side="right")
+        
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=8, pady=(0,8))
         
@@ -510,13 +531,15 @@ class App(ctk.CTk):
                             border_width=1, border_color=C_BORDER)
 
     class _LogWriter:
-        def __init__(self, widget):
-            self.w = widget
+        def __init__(self, *widgets):
+            self.ws = widgets
         def write(self, s):
-            self.w.configure(state="normal")
-            self.w.insert("end", s)
-            self.w.see("end")
-            self.w.configure(state="disabled")
+            for w in self.ws:
+                if w:
+                    w.configure(state="normal")
+                    w.insert("end", s)
+                    w.see("end")
+                    w.configure(state="disabled")
         def flush(self): pass
 
     def _log(self, msg):
@@ -563,6 +586,26 @@ class App(ctk.CTk):
             self._log("向导完成，坐标已保存")
 
     # ═══════════════════════ AI 扫描 ═══════════════════════
+    def _get_api_err_msg(self, e):
+        err = str(e).lower()
+        if "403" in err: return "API Key 无效、无权限或未开启代理(403)"
+        elif "400" in err: return "请求参数错误或被拒绝(400)"
+        elif "429" in err or "quota" in err or "exhausted" in err: return "API 额度已耗尽或请求过于频繁(429)"
+        elif "500" in err: return "Gemini 服务器内部错误(500)"
+        elif "closed" in err: return "网络连接被强行关闭 (请检查代理是否稳定)"
+        elif "timeout" in err: return "网络请求超时 (请检查代理是否可用)"
+        return f"发生错误: {str(e)[:50]}"
+
+    def _get_api_err_msg(self, e):
+        err = str(e).lower()
+        if "403" in err: return "API Key 无效、无权限或未开启代理(403)"
+        elif "400" in err: return "请求参数错误或被拒绝(400)"
+        elif "429" in err or "quota" in err or "exhausted" in err: return "API 额度已耗尽或请求过于频繁(429)"
+        elif "500" in err: return "Gemini 服务器内部错误(500)"
+        elif "closed" in err: return "网络连接被强行关闭 (请检查代理是否稳定)"
+        elif "timeout" in err: return "网络请求超时 (请检查代理是否可用)"
+        return f"发生错误: {str(e)[:50]}"
+
     def _scan_thread(self):
         threading.Thread(target=self._scan, daemon=True).start()
 
@@ -583,7 +626,7 @@ class App(ctk.CTk):
             )
             client = self._client()
             r = client.models.generate_content(
-                model='gemini-3.6-flash', contents=[img, prompt],
+                model=self.api_model, contents=[img, prompt],
                 config=types.GenerateContentConfig(temperature=0.1))
             
             t = r.text.strip()
@@ -624,7 +667,9 @@ class App(ctk.CTk):
             self._log(f"识别到 {len(self.drafts)} 个: {preview}")
             self.status.configure(text=f"{len(self.drafts)} 个草稿就绪")
         except Exception as e:
-            self._log(f"✗ {e}"); self.status.configure(text="扫描失败")
+            msg = self._get_api_err_msg(e)
+            self._log(f"✗ {msg}"); self.status.configure(text="扫描失败")
+            self.after(0, lambda m=msg: self._show_toast("AI 扫描失败", m, C_DANGER, 6000))
 
     def _fill_queue(self):
         for i in self.queue.get_children(): self.queue.delete(i)
@@ -941,7 +986,7 @@ class App(ctk.CTk):
         try:
             client = self._client()
             r = client.models.generate_content(
-                model='gemini-3.6-flash', contents=prompt,
+                model=self.api_model, contents=prompt,
                 config=types.GenerateContentConfig(temperature=0.1))
             t = r.text.strip()
             for pfx in ["```json", "```"]:
@@ -950,15 +995,8 @@ class App(ctk.CTk):
             data = json.loads(t.strip())
             self.after(0, self._fill_ren, data)
         except Exception as e: 
-            err = str(e)
-            msg = f"发生错误: {err[:50]}"
-            if "403" in err: msg = "API Key 无效、无权限或未开启代理(403)"
-            elif "400" in err: msg = "请求参数错误或被拒绝(400)"
-            elif "500" in err: msg = "Gemini 服务器内部错误(500)"
-            elif "closed" in err: msg = "网络连接被强行关闭 (请检查代理是否稳定)"
-            elif "timeout" in err.lower(): msg = "网络请求超时 (请检查代理是否可用)"
-            
-            self._log(f"✗ {err}")
+            msg = self._get_api_err_msg(e)
+            self._log(f"✗ {msg}")
             self.after(0, lambda m=msg: self._show_toast("AI 重命名失败", m, C_DANGER, 6000))
             self.after(0, self._reset_ren_ui)
 
