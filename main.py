@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.4.10"
+VERSION   = "1.5.0"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -558,11 +558,6 @@ class App(ctk.CTk):
                 self.coords[self.rec_state] = (x, y)
                 if self.rec_state == "popup_close":
                     r, g, b = pyautogui.pixel(x, y)
-                    is_dark_green = (r < 80 and g > r + 10 and b > r + 10)
-                    if (r > 200 and g > 200 and b > 200) or (r < 20 and g < 20 and b < 20) or is_dark_green:
-                        self._log(f"  ⚠️ 取色失败 RGB({r},{g},{b})：请等待按钮变成亮色后再指着绿色背景按F8！")
-                        self.after(0, lambda: self._show_toast("重新录制", "请等待按钮变亮，且避开文字按F8", C_WARN, 4000))
-                        return
                     self.close_color = (r, g, b)
                     self._log(f"  ✓ 弹窗/返回 ({x},{y}) RGB({r},{g},{b})")
                 else:
@@ -695,21 +690,23 @@ class App(ctk.CTk):
         for _ in range(5):
             if self.stop_flag: return
             time.sleep(1)
-        # 轮询像素直到关闭按钮出现
+        # 亮色目标 (126,222,228)  暗色干扰 (39,66,68)
+        BRIGHT = (126, 222, 228)
+        DARK   = (39, 66, 68)
+        # 轮询像素直到按钮变亮
         self._log("  · 等待导出完成...")
         while not self.stop_flag:
-            # Check the exact point, and points 10 pixels around it to avoid text
-            colors = [pyautogui.pixel(x, y), pyautogui.pixel(x, y-10), pyautogui.pixel(x, y+10), pyautogui.pixel(x-20, y)]
-            done = False
-            for r, g, b in colors:
-                # 严格按照用户取色的颜色匹配，拒绝纯白字/纯黑/暗色干扰
-                is_white_or_dark = (r > 200 and g > 200 and b > 200) or (r < 20 and g < 20 and b < 20)
-                is_dark_green = (r < 80 and g > r + 10 and b > r + 10)
-                if not is_white_or_dark and not is_dark_green and abs(r-tc[0])+abs(g-tc[1])+abs(b-tc[2]) < 20:
-                    done = True; break
-                    
-            if done:
-                self._log("  ✓ 导出完成"); break
+            r, g, b = pyautogui.pixel(x, y)
+            # 计算与亮色和暗色的曼哈顿距离
+            dist_bright = abs(r - BRIGHT[0]) + abs(g - BRIGHT[1]) + abs(b - BRIGHT[2])
+            dist_dark   = abs(r - DARK[0])   + abs(g - DARK[1])   + abs(b - DARK[2])
+            # 也检查与用户录入颜色的距离（兼容关闭弹窗等非返回首页的场景）
+            dist_user   = abs(r - tc[0]) + abs(g - tc[1]) + abs(b - tc[2])
+            # 条件：像素接近亮色，或者接近用户录入色且远离暗色
+            if dist_bright < 80:
+                self._log(f"  ✓ 导出完成 (亮色匹配 d={dist_bright})"); break
+            if dist_user < 30 and dist_dark > 60:
+                self._log(f"  ✓ 导出完成 (录入色匹配 d={dist_user})"); break
             time.sleep(2)
 
     def _start_export(self):
@@ -848,20 +845,17 @@ class App(ctk.CTk):
             try:
                 with open(jp, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                changed = False
                 for t in data.get('tracks', []):
-                    if t.get('type') == 'text' and 'attribute' in t:
-                        t.pop('attribute')
-                        changed = True
-                if changed:
-                    with open(jp, 'w', encoding='utf-8') as f:
+                    if t.get('type') == 'text':
+                        t['attribute'] = 0
+                with open(jp, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False)
+                bak_path = jp + ".bak"
+                if os.path.exists(bak_path):
+                    with open(bak_path, 'w', encoding='utf-8') as f:
                         json.dump(data, f, ensure_ascii=False)
-                    bak_path = jp + ".bak"
-                    if os.path.exists(bak_path):
-                        with open(bak_path, 'w', encoding='utf-8') as f:
-                            json.dump(data, f, ensure_ascii=False)
-                    self._log(f"  ✓ {fn} 已解除隐藏")
-                    ok += 1
+                self._log(f"  ✓ {fn} 已解除隐藏")
+                ok += 1
             except Exception as e:
                 self._log(f"  ✗ {fn} 失败: {e}")
         self._log(f"完成，共解除隐藏 {ok} 个草稿")
@@ -894,7 +888,6 @@ class App(ctk.CTk):
             try:
                 with open(jp, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                changed = False
                 for t in data.get('materials', {}).get('texts', []):
                     try:
                         c = json.loads(t.get('content', '{}'))
@@ -902,17 +895,15 @@ class App(ctk.CTk):
                         if styles:
                             styles[0]['font'] = tpl_font
                             t['content'] = json.dumps(c, ensure_ascii=False)
-                            changed = True
                     except: pass
-                if changed:
-                    with open(jp, 'w', encoding='utf-8') as f:
+                with open(jp, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False)
+                bak_path = jp + ".bak"
+                if os.path.exists(bak_path):
+                    with open(bak_path, 'w', encoding='utf-8') as f:
                         json.dump(data, f, ensure_ascii=False)
-                    bak_path = jp + ".bak"
-                    if os.path.exists(bak_path):
-                        with open(bak_path, 'w', encoding='utf-8') as f:
-                            json.dump(data, f, ensure_ascii=False)
-                    self._log(f"  ✓ {fn} 字体已统一")
-                    ok += 1
+                self._log(f"  ✓ {fn} 字体已统一")
+                ok += 1
             except Exception as e:
                 self._log(f"  ✗ {fn} 失败: {e}")
                 
