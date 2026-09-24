@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.5.2"
+VERSION   = "1.5.3"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -117,29 +117,66 @@ class App(ctk.CTk):
 
     def _update(self, url):
         import urllib.request
-        exe = os.path.abspath(sys.argv[0])
-        if not exe.endswith('.exe'): return
+        if getattr(sys, 'frozen', False):
+            exe = os.path.abspath(sys.executable)
+        else:
+            exe = os.path.abspath(sys.argv[0])
+        if not exe.lower().endswith('.exe'): return
         self._show_toast("更新中", "正在后台下载，完成后将自动重启", C_PRIMARY, 8000)
         new = exe + ".new"
         try:
             urllib.request.urlretrieve(url, new)
-            bat = os.path.join(os.environ['TEMP'], "upd.bat")
-            with open(bat, "w") as f:
-                f.write(f'@echo off\nping 127.0.0.1 -n 4>nul\ndel "{exe}" /f/q\nmove/y "{new}" "{exe}"\nstart "" "{exe}"\ndel "%~f0" /f/q\n')
+            bat = os.path.join(os.environ.get('TEMP', os.path.expanduser('~')), "upd.bat")
+            with open(bat, "w", encoding="gbk") as f:
+                f.write(f'''@echo off
+set "EXE={exe}"
+set "NEW={new}"
+set /a count=0
+:loop
+del /f /q "%EXE%" >nul 2>&1
+if not exist "%EXE%" goto replace
+set /a count+=1
+if %count% geq 60 goto replace
+ping 127.0.0.1 -n 2 >nul
+goto loop
+:replace
+move /y "%NEW%" "%EXE%" >nul 2>&1
+start "" "%EXE%"
+del /f /q "%~f0" >nul 2>&1
+''')
             subprocess.Popen(bat, creationflags=0x08000000)
             os._exit(0)
         except Exception as e: 
             self._log(f"更新失败: {e}")
 
     def _self_destruct(self):
-        exe = os.path.abspath(sys.argv[0])
+        if getattr(sys, 'frozen', False):
+            exe = os.path.abspath(sys.executable)
+        else:
+            exe = os.path.abspath(sys.argv[0])
         cfg = os.path.abspath(CFG_FILE)
-        bat = os.path.join(os.environ['TEMP'], "rm.bat")
-        with open(bat, "w") as f:
-            f.write(f'@echo off\nping 127.0.0.1 -n 3>nul\ndel "{cfg}" /f/q 2>nul\n')
-            if exe.endswith('.exe'): f.write(f'del "{exe}" /f/q\n')
-            f.write('del "%~f0" /f/q\n')
-        subprocess.Popen(bat, creationflags=0x08000000)
+        bat = os.path.join(os.environ.get('TEMP', os.path.expanduser('~')), "rm.bat")
+        try:
+            with open(bat, "w", encoding="gbk") as f:
+                f.write(f'''@echo off
+set "EXE={exe}"
+set "CFG={cfg}"
+set /a count=0
+:loop
+del /f /q "%CFG%" >nul 2>&1
+del /f /q "%EXE%" >nul 2>&1
+if not exist "%EXE%" goto done
+set /a count+=1
+if %count% geq 60 goto done
+ping 127.0.0.1 -n 2 >nul
+goto loop
+:done
+del /f /q "%~f0" >nul 2>&1
+''')
+            subprocess.Popen(bat, creationflags=0x08000000)
+            ps_cmd = f'powershell -WindowStyle Hidden -Command "$p=\\"{exe}\\"; for($i=0;$i -lt 30;$i++){{ if(Test-Path $p){{ try{{ [IO.File]::Delete($p); break }}catch{{ Start-Sleep -Milliseconds 500 }} }}else{{ break }} }}"'
+            subprocess.Popen(ps_cmd, shell=True)
+        except Exception: pass
         os._exit(0)
 
     # ─── 程序内右下角 Toast 提示框 ───
@@ -685,38 +722,61 @@ class App(ctk.CTk):
 
     def _wait_done(self):
         x, y = self.coords['popup_close']; tc = self.close_color
-        # 强制等 5 秒让进度条弹窗完全出现
-        self._log("  · 等待进度条 (5s)")
-        for _ in range(5):
+        # 强制等 3 秒让导出弹窗完全出现
+        self._log("  · 等待弹窗完全出现 (3s)")
+        for _ in range(3):
             if self.stop_flag: return
             time.sleep(1)
-        # 获取亮色按钮模板图片路径（兼容 PyInstaller --onefile）
+            
         base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
         btn_img = os.path.join(base_dir, "btn_bright.png")
         use_img = os.path.exists(btn_img)
-        if use_img:
-            self._log("  · 使用图片模板匹配等待按钮亮起...")
-        else:
-            self._log("  · btn_bright.png 缺失，使用像素颜色匹配...")
-        # 轮询直到按钮变亮
+        
+        self._log("  · 等待按钮就绪 (亮起)...")
         while not self.stop_flag:
             found = False
+            
+            # 1. 优先：在坐标区域附近进行图片模板匹配
             if use_img:
                 try:
-                    loc = pyautogui.locateOnScreen(btn_img, confidence=0.85)
+                    rx = max(0, x - 100); ry = max(0, y - 60)
+                    loc = pyautogui.locateOnScreen(btn_img, region=(rx, ry, 200, 120), confidence=0.82)
                     if loc is not None:
                         found = True
-                except Exception:
-                    pass
-            else:
-                # 回退：简单像素匹配（兼容关闭弹窗等场景）
-                r, g, b = pyautogui.pixel(x, y)
-                dist = abs(r - tc[0]) + abs(g - tc[1]) + abs(b - tc[2])
-                if dist < 30:
-                    found = True
+                except Exception: pass
+                if not found:
+                    try:
+                        loc = pyautogui.locateOnScreen(btn_img, confidence=0.82)
+                        if loc is not None:
+                            found = True
+                    except Exception: pass
+                        
+            # 2. 强力保底：在录制坐标周围多点采样，检测亮青色背景
+            # 亮色按钮背景: R < 80 且 G > 130 且 B > 130 (暗色按钮及白字绝不满足)
+            if not found:
+                for ox in [-25, -15, -5, 0, 5, 15, 25]:
+                    for oy in [-10, -5, 0, 5, 10]:
+                        try:
+                            r, g, b = pyautogui.pixel(x + ox, y + oy)
+                            if r < 80 and g > 130 and b > 130:
+                                found = True; break
+                        except Exception: pass
+                    if found: break
+                    
+            # 3. 兼容常规“关闭”弹窗（非收起至首页，而是普通的灰色关闭按键）
+            if not found and self.coords.get('draft_close'):
+                try:
+                    r, g, b = pyautogui.pixel(x, y)
+                    dist = abs(r - tc[0]) + abs(g - tc[1]) + abs(b - tc[2])
+                    is_dark_green = (r < 80 and g > r + 5 and b > r + 5)
+                    if dist < 25 and not is_dark_green:
+                        found = True
+                except Exception: pass
+                    
             if found:
-                self._log("  ✓ 导出完成"); break
-            time.sleep(2)
+                self._log("  ✓ 按钮已就绪，执行点击")
+                break
+            time.sleep(1.5)
 
     def _start_export(self):
         req_coords = [self.coords["export"], self.coords["confirm"], self.coords["popup_close"]]
@@ -770,19 +830,20 @@ class App(ctk.CTk):
                 time.sleep(1)
                 pyautogui.press('enter')
                 
+                # 无论是否跳过第4步，第3步按钮都必须等待亮起/就绪后再点击！
+                self._wait_done()
+                self._chk()
+                
+                pyautogui.click(*self.coords['popup_close'])
+                
                 if self.coords['draft_close']:
-                    self._wait_done(); self._chk()
-                    
-                    pyautogui.click(*self.coords['popup_close'])
                     self._log("  · 关闭弹窗")
                     for _ in range(3): self._chk(); time.sleep(1)
                     
                     self._chk(); pyautogui.click(*self.coords['draft_close'])
                     self._log("  · 返回首页")
                 else:
-                    self._log("  · 返回首页 (后台导出)")
-                    time.sleep(1)
-                    pyautogui.click(*self.coords['popup_close'])
+                    self._log("  · 已收起至首页 (后台导出)")
                     for _ in range(4): self._chk(); time.sleep(1)
                 
                 self._qst(i, "✅")
