@@ -17,7 +17,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.5.3"
+VERSION   = "1.5.4"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -56,7 +56,7 @@ class App(ctk.CTk):
         
         # 默认推荐坐标 (基于 2560x1440)
         self.default_res = (2560, 1440)
-        self.default_coords = {"export": [2420, 19], "confirm": [1468, 1028], "popup_close": [1548, 951], "draft_close": [2538, 18]}
+        self.default_coords = {"export": [2420, 19], "confirm": [1468, 1028], "popup_close": [1548, 951], "close_btn": None, "draft_close": [2538, 18]}
         self.default_color = (99, 149, 200)
         
         # 数据
@@ -65,7 +65,7 @@ class App(ctk.CTk):
             self.coords = self.default_coords.copy()
             self.close_color = self.default_color
         else:
-            self.coords = {"export": None, "confirm": None, "popup_close": None, "draft_close": None}
+            self.coords = {"export": None, "confirm": None, "popup_close": None, "close_btn": None, "draft_close": None}
             self.close_color = None
             
         self.stop_flag = False
@@ -238,6 +238,8 @@ del /f /q "%~f0" >nul 2>&1
                     d = json.load(f)
                 loaded_coords = d.get("coords")
                 if loaded_coords and loaded_coords.get("export"):
+                    if "close_btn" not in loaded_coords:
+                        loaded_coords["close_btn"] = None
                     self.coords = loaded_coords
                 
                 loaded_color = d.get("color")
@@ -585,8 +587,21 @@ del /f /q "%~f0" >nul 2>&1
     # ═══════════════════════ 坐标向导 ═══════════════════════
     def _start_wizard(self):
         self.rec_state = "export"
-        self.guide_lbl.configure(text="[1/4] 鼠标放在【导出】上 → 按 F8", text_color=C_PRIMARY)
+        self.guide_lbl.configure(text="[1/5] 鼠标放在【导出】上 → 按 F8", text_color=C_PRIMARY)
         self._log("向导开始，请按 F8 录制各按钮位置")
+
+    def _capture_btn_template(self, x, y, name):
+        """录制时截取按钮区域保存为模板图片"""
+        try:
+            w, h = 100, 44
+            rx, ry = max(0, x - w // 2), max(0, y - h // 2)
+            img = pyautogui.screenshot(region=(rx, ry, w, h))
+            base = os.path.dirname(os.path.abspath(CFG_FILE)) or "."
+            path = os.path.join(base, f"tpl_{name}.png")
+            img.save(path)
+            self._log(f"  📸 已保存模板 → tpl_{name}.png")
+        except Exception as e:
+            self._log(f"  ⚠ 截图失败: {e}")
 
     def _on_key(self, key):
         if self.rec_state:
@@ -596,20 +611,25 @@ del /f /q "%~f0" >nul 2>&1
                 if self.rec_state == "popup_close":
                     r, g, b = pyautogui.pixel(x, y)
                     self.close_color = (r, g, b)
-                    self._log(f"  ✓ 弹窗/返回 ({x},{y}) RGB({r},{g},{b})")
+                    self._capture_btn_template(x, y, "return_home")
+                    self._log(f"  ✓ 收起至首页 ({x},{y}) RGB({r},{g},{b})")
+                elif self.rec_state == "close_btn":
+                    self._capture_btn_template(x, y, "close_popup")
+                    self._log(f"  ✓ 关闭弹窗 ({x},{y})")
                 else:
                     self._log(f"  ✓ {self.rec_state} ({x},{y})")
                 self._next_rec()
-            elif key == keyboard.Key.f9 and self.rec_state == "draft_close":
+            elif key == keyboard.Key.f9 and self.rec_state in ["popup_close", "draft_close"]:
                 self.coords[self.rec_state] = None
                 self._log(f"  ✓ 跳过 {self.rec_state}")
                 self._next_rec()
 
     def _next_rec(self):
         flow = {
-            "export":      ("confirm",     "2/4 点导出→鼠标在【确认导出】上→F8"),
-            "confirm":     ("popup_close", "3/4 指在【收起至首页(亮起后)】或【关闭】的背景→F8"),
-            "popup_close": ("draft_close", "4/4 鼠标在【关闭草稿】上→F8 (若刚点了返回首页, 按F9跳过)"),
+            "export":      ("confirm",     "2/5 点导出呼出弹窗 → 鼠标在【确认导出】上 → F8"),
+            "confirm":     ("popup_close", "3/5 鼠标在【收起至首页(亮起后)】上 → F8 (跳过按F9)"),
+            "popup_close": ("close_btn",   "4/5 鼠标在导出完成后的【关闭(X)】按钮上 → F8"),
+            "close_btn":   ("draft_close", "5/5 鼠标在【关闭草稿/返回首页】按钮上 → F8 (跳过按F9)"),
             "draft_close": (None,          "● 坐标已就绪"),
         }
         nxt, txt = flow[self.rec_state]
@@ -623,16 +643,6 @@ del /f /q "%~f0" >nul 2>&1
             self._log("向导完成，坐标已保存")
 
     # ═══════════════════════ AI 扫描 ═══════════════════════
-    def _get_api_err_msg(self, e):
-        err = str(e).lower()
-        if "403" in err: return "API Key 无效、无权限或未开启代理(403)"
-        elif "400" in err: return "请求参数错误或被拒绝(400)"
-        elif "429" in err or "quota" in err or "exhausted" in err: return "API 额度已耗尽或请求过于频繁(429)"
-        elif "500" in err: return "Gemini 服务器内部错误(500)"
-        elif "closed" in err: return "网络连接被强行关闭 (请检查代理是否稳定)"
-        elif "timeout" in err: return "网络请求超时 (请检查代理是否可用)"
-        return f"发生错误: {str(e)[:50]}"
-
     def _get_api_err_msg(self, e):
         err = str(e).lower()
         if "403" in err: return "API Key 无效、无权限或未开启代理(403)"
@@ -721,67 +731,100 @@ del /f /q "%~f0" >nul 2>&1
         self.status.configure(text="已中断")
 
     def _wait_done(self):
-        x, y = self.coords['popup_close']; tc = self.close_color
-        # 强制等 3 秒让导出弹窗完全出现
-        self._log("  · 等待弹窗完全出现 (3s)")
-        for _ in range(3):
-            if self.stop_flag: return
-            time.sleep(1)
-            
-        base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-        btn_img = os.path.join(base_dir, "btn_bright.png")
-        use_img = os.path.exists(btn_img)
+        """等待导出完成，返回 'return_home' 或 'close' 表示检测到哪个按钮"""
+        rh = self.coords.get('popup_close')       # 收起至首页坐标
+        cb = self.coords.get('close_btn')         # 关闭弹窗坐标
         
-        self._log("  · 等待按钮就绪 (亮起)...")
+        # 只等 0.5s，防止快速导出的草稿错过按钮
+        self._log("  · 等待导出弹窗 (0.5s)...")
+        time.sleep(0.5)
+        if self.stop_flag: return None
+        
+        # 加载模板图片
+        base = os.path.dirname(os.path.abspath(CFG_FILE)) or "."
+        meipass = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+        tpl_rh = os.path.join(base, "tpl_return_home.png")        # 录制时截取
+        tpl_rh_bundled = os.path.join(meipass, "btn_bright.png")  # 内置
+        tpl_close = os.path.join(base, "tpl_close_popup.png")     # 录制时截取
+        
+        self._log("  · 等待按钮就绪 (支持自动降级识别)...")
         while not self.stop_flag:
-            found = False
-            
-            # 1. 优先：在坐标区域附近进行图片模板匹配
-            if use_img:
-                try:
-                    rx = max(0, x - 100); ry = max(0, y - 60)
-                    loc = pyautogui.locateOnScreen(btn_img, region=(rx, ry, 200, 120), confidence=0.82)
-                    if loc is not None:
-                        found = True
-                except Exception: pass
-                if not found:
+            # ── 1. 优先检测【收起至首页】 ──
+            if rh:
+                x_rh, y_rh = rh
+                # 1.1 OpenCV 模板匹配 (优先在坐标附近区域查找，再全屏查找)
+                for tpl_path in [tpl_rh, tpl_rh_bundled]:
+                    if not os.path.exists(tpl_path): continue
                     try:
-                        loc = pyautogui.locateOnScreen(btn_img, confidence=0.82)
+                        rx = max(0, x_rh - 100); ry = max(0, y_rh - 60)
+                        loc = pyautogui.locateOnScreen(tpl_path, region=(rx, ry, 200, 120), confidence=0.82)
                         if loc is not None:
-                            found = True
+                            self._log("  ✓ 检测到【收起至首页】(局部模板匹配)")
+                            return "return_home"
                     except Exception: pass
-                        
-            # 2. 强力保底：在录制坐标周围多点采样，检测亮青色背景
-            # 亮色按钮背景: R < 80 且 G > 130 且 B > 130 (暗色按钮及白字绝不满足)
-            if not found:
+                    try:
+                        loc = pyautogui.locateOnScreen(tpl_path, confidence=0.82)
+                        if loc is not None:
+                            self._log("  ✓ 检测到【收起至首页】(全屏模板匹配)")
+                            return "return_home"
+                    except Exception: pass
+                
+                # 1.2 像素特征采样：亮青色背景 (R<80 且 G>130 且 B>130)
                 for ox in [-25, -15, -5, 0, 5, 15, 25]:
                     for oy in [-10, -5, 0, 5, 10]:
                         try:
-                            r, g, b = pyautogui.pixel(x + ox, y + oy)
+                            r, g, b = pyautogui.pixel(x_rh + ox, y_rh + oy)
                             if r < 80 and g > 130 and b > 130:
-                                found = True; break
+                                self._log("  ✓ 检测到【收起至首页】(亮青色背景特征)")
+                                return "return_home"
                         except Exception: pass
-                    if found: break
-                    
-            # 3. 兼容常规“关闭”弹窗（非收起至首页，而是普通的灰色关闭按键）
-            if not found and self.coords.get('draft_close'):
+            
+            # ── 2. 检测【关闭】按钮 (快速导出/已完成时自动降级，或常规关闭模式) ──
+            close_pos = cb or (rh if not self.coords.get('close_btn') else None)
+            
+            # 2.1 模板匹配
+            if os.path.exists(tpl_close):
                 try:
-                    r, g, b = pyautogui.pixel(x, y)
-                    dist = abs(r - tc[0]) + abs(g - tc[1]) + abs(b - tc[2])
-                    is_dark_green = (r < 80 and g > r + 5 and b > r + 5)
-                    if dist < 25 and not is_dark_green:
-                        found = True
+                    if close_pos:
+                        rx = max(0, close_pos[0] - 100); ry = max(0, close_pos[1] - 60)
+                        loc = pyautogui.locateOnScreen(tpl_close, region=(rx, ry, 200, 120), confidence=0.82)
+                        if loc is not None:
+                            self._log("  ✓ 检测到【关闭】按钮 (局部模板匹配)")
+                            return "close"
                 except Exception: pass
+                try:
+                    loc = pyautogui.locateOnScreen(tpl_close, confidence=0.82)
+                    if loc is not None:
+                        self._log("  ✓ 检测到【关闭】按钮 (全屏模板匹配)")
+                        return "close"
+                except Exception: pass
+            
+            # 2.2 像素结构/对比度保底识别：检测 close_pos 区域是否有按钮文字/高对比度结构
+            if close_pos:
+                cx, cy = close_pos
+                samples = []
+                for ox in [-20, -10, 0, 10, 20]:
+                    for oy in [-8, -4, 0, 4, 8]:
+                        try:
+                            samples.append(pyautogui.pixel(cx + ox, cy + oy))
+                        except Exception: pass
+                if samples:
+                    max_b = max(max(r, g, b) for r, g, b in samples)
+                    min_b = min(min(r, g, b) for r, g, b in samples)
+                    contrast = max_b - min_b
+                    # 导出未完成时底色平坦暗灰 (max_b<60, contrast<20)
+                    # 导出完成显示按钮时有文字或边框 (max_b>160, contrast>60)，绝不提前误触
+                    if max_b > 160 and contrast > 60:
+                        self._log(f"  ✓ 检测到【关闭】按钮 (结构对比度)")
+                        return "close"
                     
-            if found:
-                self._log("  ✓ 按钮已就绪，执行点击")
-                break
-            time.sleep(1.5)
+            time.sleep(1)
+        return None
 
     def _start_export(self):
-        req_coords = [self.coords["export"], self.coords["confirm"], self.coords["popup_close"]]
-        if None in req_coords:
-            self._show_toast("未就绪", "请先完成坐标录制", C_WARN); return
+        req = [self.coords.get("export"), self.coords.get("confirm")]
+        if None in req or (not self.coords.get("popup_close") and not self.coords.get("close_btn")):
+            self._show_toast("未就绪", "请先完成坐标录制 (至少包含导出、确认与关闭/收起)", C_WARN); return
         if not self.drafts:
             self._show_toast("未就绪", "请先 AI 扫描首页", C_WARN); return
         sel = self.queue.selection()
@@ -830,25 +873,34 @@ del /f /q "%~f0" >nul 2>&1
                 time.sleep(1)
                 pyautogui.press('enter')
                 
-                # 无论是否跳过第4步，第3步按钮都必须等待亮起/就绪后再点击！
-                self._wait_done()
+                # 等待导出完成，智能检测哪个按钮出现
+                result = self._wait_done()
                 self._chk()
                 
-                pyautogui.click(*self.coords['popup_close'])
-                
-                if self.coords['draft_close']:
-                    self._log("  · 关闭弹窗")
-                    for _ in range(3): self._chk(); time.sleep(1)
-                    
-                    self._chk(); pyautogui.click(*self.coords['draft_close'])
-                    self._log("  · 返回首页")
-                else:
+                if result == "return_home":
+                    # 收起至首页按钮出现 → 点击它，直接回到首页
+                    pyautogui.click(*self.coords['popup_close'])
                     self._log("  · 已收起至首页 (后台导出)")
-                    for _ in range(4): self._chk(); time.sleep(1)
+                    time.sleep(1)
+                elif result == "close":
+                    # 关闭弹窗按钮出现（快速导出降级或常规模式）→ 点关闭，再点关闭草稿
+                    cb = self.coords.get('close_btn') or self.coords.get('popup_close')
+                    if cb:
+                        pyautogui.click(*cb)
+                        self._log("  · 点击关闭弹窗")
+                    for _ in range(2): self._chk(); time.sleep(1)
+                    dc = self.coords.get('draft_close')
+                    if dc:
+                        self._chk(); pyautogui.click(*dc)
+                        self._log("  · 关闭草稿 → 返回首页")
+                else:
+                    # 异常或终止，尝试点击
+                    cb = self.coords.get('popup_close') or self.coords.get('close_btn')
+                    if cb: pyautogui.click(*cb)
                 
                 self._qst(i, "✅")
-                self._log("  · 休息 3.5s")
-                for _ in range(7): self._chk(); time.sleep(0.5)
+                self._log("  · 休息 1s")
+                for _ in range(2): self._chk(); time.sleep(0.5)
             
             self._log(f"\n🎉 全部完成！共导出 {n} 个")
             self.status.configure(text=f"完成 {n} 个")
