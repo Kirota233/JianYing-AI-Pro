@@ -8,3 +8,4 @@ customtkinter==6.0.0
 darkdetect==0.8.0
 windnd==1.0.7
 opencv-python
+pywebview

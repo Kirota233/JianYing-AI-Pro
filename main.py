@@ -3,6 +3,7 @@
 Built with CustomTkinter for a modern native look.
 """
 
+import webview
 import customtkinter as ctk
 from tkinter import ttk, filedialog
 import tkinter as tk
@@ -19,7 +20,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.6.0"
+VERSION   = "2.0"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -299,61 +300,391 @@ class JianyingDraftIO:
         if result_code:
             raise RuntimeError(f"剪映草稿加密写入失败({result_code}): {detail}")
 
-# ─── 主应用 ────────────────────────────────────────────────
-class App(ctk.CTk):
+
+BANKNOTE_HTML = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>JIANYING AI PRO v2.0.0</title>\n<style>\n  :root {\n    --bg-ivory: #FBF9F5;\n    --bg-audit: #F2EFE9;\n    --bg-card: #FFFFFF;\n    --crimson: #9E1B16;\n    --crimson-hover: #7D1410;\n    --ink: #1A1817;\n    --muted: #6E6A63;\n    --border-line: #D6D1C7;\n    --emerald: #0B6E4F;\n    --amber: #B45309;\n    --danger: #B91C1C;\n    --font-sans: \'Inter\', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;\n    --font-mono: \'JetBrains Mono\', \'Consolas\', \'SFMono-Regular\', monospace;\n  }\n\n  * {\n    box-sizing: border-box;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, body {\n    width: 100%;\n    height: 100%;\n    overflow: hidden;\n    font-family: var(--font-sans);\n    color: var(--ink);\n    background-color: var(--bg-ivory);\n    background-image:\n      repeating-linear-gradient(\n        0deg,\n        transparent,\n        transparent 3px,\n        rgba(158, 27, 22, 0.035) 3px,\n        rgba(158, 27, 22, 0.035) 4px\n      ),\n      repeating-linear-gradient(\n        90deg,\n        transparent,\n        transparent 23px,\n        rgba(26, 24, 23, 0.02) 23px,\n        rgba(26, 24, 23, 0.02) 24px\n      );\n    user-select: none;\n    -webkit-font-smoothing: antialiased;\n  }\n\n  /* 单栏上下布局：上为主体工作区，下为日志与状态区 */\n  .banknote-shell {\n    width: 112.36vw;\n    height: 112.36vh;\n    zoom: 0.89;\n    border: 2px solid var(--ink);\n    display: flex;\n    flex-direction: column;\n    position: relative;\n    overflow: hidden;\n  }\n\n  /* 一体化可拖拽自定义瑞士顶栏 */\n  .custom-titlebar {\n    height: 30px;\n    background: var(--ink);\n    color: var(--bg-ivory);\n    border-bottom: 1.5px solid var(--ink);\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    padding: 0 0 0 12px;\n    flex-shrink: 0;\n    cursor: move;\n  }\n  .ct-brand {\n    display: flex;\n    align-items: center;\n    gap: 8px;\n    font-family: var(--font-mono);\n    font-size: 11px;\n    font-weight: 800;\n    letter-spacing: 0.06em;\n  }\n  .ct-cross {\n    background: var(--crimson);\n    color: #FFFFFF;\n    width: 16px;\n    height: 16px;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    font-size: 11px;\n    font-weight: 900;\n  }\n  .ct-controls {\n    display: flex;\n    height: 100%;\n  }\n  .ct-btn {\n    width: 34px;\n    height: 100%;\n    border: none;\n    border-left: 1px solid #33302E;\n    background: transparent;\n    color: var(--bg-ivory);\n    font-family: var(--font-mono);\n    font-size: 12px;\n    font-weight: 700;\n    cursor: pointer;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    transition: background 0.1s;\n  }\n  .ct-btn:hover {\n    background: #33302E;\n  }\n  .ct-btn.close:hover {\n    background: var(--crimson);\n    color: #FFFFFF;\n  }\n\n  /* =========================================================\n     TOP & MAIN WORKSPACE\n     ========================================================= */\n  .bn-center {\n    padding: 10px 14px 8px 14px;\n    display: flex;\n    flex-direction: column;\n    flex: 1;\n    overflow: hidden;\n  }\n\n  /* Version & Coordinate Status Bar */\n  .sn-bar {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    margin-bottom: 2px;\n  }\n\n  .sn-code {\n    font-family: var(--font-mono);\n    font-size: 11px;\n    font-weight: 800;\n    letter-spacing: 0.04em;\n    color: var(--crimson);\n  }\n\n  .coord-stamp {\n    font-family: var(--font-mono);\n    font-size: 10px;\n    font-weight: 700;\n    padding: 2px 8px;\n    background: var(--crimson);\n    color: #FFFFFF;\n    border: 1px solid var(--ink);\n    white-space: nowrap;\n  }\n  .coord-stamp.ready {\n    background: var(--emerald);\n  }\n  .coord-stamp.recording {\n    background: var(--amber);\n  }\n\n  .title-bar {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    padding-bottom: 6px;\n    border-bottom: 2px solid var(--ink);\n  }\n\n  .main-title {\n    font-size: 18px;\n    font-weight: 900;\n    letter-spacing: -0.02em;\n    color: var(--ink);\n  }\n\n  /* 4-Tab Navigation */\n  .bn-tabs {\n    display: grid;\n    grid-template-columns: repeat(4, 1fr);\n    border: 1.5px solid var(--ink);\n    margin: 8px 0;\n    background: var(--ink);\n    gap: 1px;\n  }\n\n  .bn-tab {\n    background: var(--bg-card);\n    color: var(--ink);\n    padding: 6px 4px;\n    font-size: 11px;\n    font-weight: 800;\n    text-align: center;\n    cursor: pointer;\n    transition: all 0.1s ease;\n    font-family: var(--font-sans);\n    border: none;\n    outline: none;\n    white-space: nowrap;\n  }\n  .bn-tab:hover {\n    background: var(--bg-audit);\n  }\n  .bn-tab.active {\n    background: var(--ink);\n    color: var(--bg-ivory);\n  }\n\n  /* Module Stage Panels */\n  .module-panel {\n    display: none;\n    flex: 1;\n    flex-direction: column;\n    justify-content: space-between;\n    overflow: hidden;\n  }\n  .module-panel.active {\n    display: flex;\n  }\n\n  /* Swiss Ledger Box */\n  .ledger-box {\n    border: 1.5px solid var(--ink);\n    background: var(--bg-card);\n    padding: 8px 10px;\n    display: flex;\n    flex-direction: column;\n    box-shadow: 2px 2px 0px rgba(26, 24, 23, 0.06);\n  }\n  .ledger-box.grow {\n    flex: 1;\n    overflow: hidden;\n    margin-bottom: 8px;\n  }\n\n  .ledger-hdr {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    font-size: 11px;\n    font-weight: 800;\n    color: var(--ink);\n    border-bottom: 1.5px solid var(--ink);\n    padding-bottom: 4px;\n    margin-bottom: 6px;\n  }\n\n  /* Table Container */\n  .table-scroll {\n    flex: 1;\n    overflow-y: auto;\n    overflow-x: hidden;\n  }\n  .table-scroll::-webkit-scrollbar {\n    width: 5px;\n  }\n  .table-scroll::-webkit-scrollbar-track {\n    background: var(--bg-audit);\n  }\n  .table-scroll::-webkit-scrollbar-thumb {\n    background: var(--ink);\n  }\n\n  table.voucher-table {\n    width: 100%;\n    border-collapse: collapse;\n    font-size: 11px;\n  }\n  table.voucher-table th {\n    position: sticky;\n    top: 0;\n    background: var(--bg-audit);\n    color: var(--ink);\n    font-size: 10px;\n    font-weight: 800;\n    text-align: left;\n    padding: 4px 8px;\n    border-bottom: 1px solid var(--ink);\n    z-index: 1;\n    white-space: nowrap;\n  }\n  table.voucher-table td {\n    padding: 5px 8px;\n    border-bottom: 1px dotted #C8C2B8;\n    font-weight: 600;\n    cursor: pointer;\n  }\n  table.voucher-table tr:hover td {\n    background: #F6F2EB;\n  }\n  table.voucher-table tr.selected td {\n    background: var(--crimson);\n    color: #FFFFFF;\n    font-weight: 700;\n    border-bottom-color: var(--crimson);\n  }\n  .empty-hint {\n    padding: 24px 10px;\n    text-align: center;\n    font-size: 11px;\n    color: var(--muted);\n  }\n\n  /* Buttons (strictly single-line no-wrap) */\n  .action-row {\n    display: flex;\n    gap: 6px;\n    align-items: center;\n  }\n\n  .btn-voucher {\n    border: 1.5px solid var(--ink);\n    background: var(--bg-card);\n    color: var(--ink);\n    padding: 6px 10px;\n    font-size: 11px;\n    font-weight: 800;\n    cursor: pointer;\n    transition: all 0.1s ease;\n    font-family: var(--font-sans);\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    gap: 4px;\n    white-space: nowrap;\n    flex-shrink: 0;\n  }\n  .btn-voucher:hover:not(:disabled) {\n    background: var(--ink);\n    color: var(--bg-ivory);\n  }\n  .btn-voucher:disabled {\n    opacity: 0.45;\n    cursor: not-allowed;\n  }\n\n  .btn-voucher.crimson {\n    background: var(--crimson);\n    color: #FFFFFF;\n    box-shadow: 2px 2px 0px var(--ink);\n  }\n  .btn-voucher.crimson:hover:not(:disabled) {\n    background: var(--crimson-hover);\n  }\n\n  .btn-voucher.ink {\n    background: var(--ink);\n    color: var(--bg-ivory);\n  }\n  .btn-voucher.ink:hover:not(:disabled) {\n    background: var(--crimson);\n    color: #FFFFFF;\n  }\n\n  .btn-voucher.flex-1 {\n    flex: 1;\n  }\n\n  /* Inputs */\n  .field-row {\n    display: flex;\n    gap: 6px;\n    align-items: center;\n  }\n  .voucher-input, .voucher-select {\n    flex: 1;\n    height: 28px;\n    border: 1.5px solid var(--ink);\n    background: var(--bg-ivory);\n    color: var(--ink);\n    padding: 0 8px;\n    font-size: 11px;\n    font-family: var(--font-mono);\n    font-weight: 600;\n    outline: none;\n    min-width: 0;\n  }\n  .voucher-input:focus, .voucher-select:focus {\n    background: #FFFFFF;\n    border-color: var(--crimson);\n  }\n\n  /* =========================================================\n     BOTTOM TELEMETRY & STATUS SECTION (置于主体之下)\n     ========================================================= */\n  .bn-bottom {\n    border-top: 2px solid var(--ink);\n    background: var(--bg-audit);\n    padding: 6px 14px 8px 14px;\n    display: flex;\n    flex-direction: column;\n    gap: 5px;\n    height: 108px;\n    flex-shrink: 0;\n  }\n\n  .bottom-meta-row {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    font-size: 11px;\n  }\n\n  .wm-status {\n    font-weight: 800;\n    color: var(--ink);\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    white-space: nowrap;\n  }\n  .wm-dot {\n    width: 7px;\n    height: 7px;\n    background: var(--crimson);\n    display: inline-block;\n  }\n\n  .spec-inline {\n    font-family: var(--font-mono);\n    font-size: 10px;\n    color: var(--muted);\n    display: flex;\n    gap: 10px;\n    white-space: nowrap;\n  }\n\n  .audit-log-box {\n    flex: 1;\n    border: 1px solid var(--ink);\n    background: #EAE5DC;\n    padding: 5px 8px;\n    font-family: var(--font-mono);\n    font-size: 10px;\n    line-height: 1.45;\n    color: #22201E;\n    overflow-y: auto;\n    white-space: pre-wrap;\n    word-break: break-all;\n    user-select: text;\n  }\n  .audit-log-box::-webkit-scrollbar {\n    width: 4px;\n  }\n  .audit-log-box::-webkit-scrollbar-thumb {\n    background: var(--ink);\n  }\n\n  /* =========================================================\n     MODAL & TOAST OVERLAYS\n     ========================================================= */\n  .modal-backdrop {\n    position: fixed;\n    inset: 0;\n    zoom: 0.89;\n    background: rgba(26, 24, 23, 0.52);\n    display: none;\n    align-items: center;\n    justify-content: center;\n    z-index: 100;\n  }\n  .modal-backdrop.active {\n    display: flex;\n  }\n  .voucher-modal {\n    width: 360px;\n    background: var(--bg-ivory);\n    border: 2px solid var(--ink);\n    box-shadow: 5px 5px 0px var(--ink);\n  }\n  .vm-hdr {\n    background: var(--crimson);\n    color: var(--bg-ivory);\n    padding: 6px 12px;\n    font-size: 11px;\n    font-weight: 700;\n    display: flex;\n    justify-content: space-between;\n    border-bottom: 1.5px solid var(--ink);\n  }\n  .vm-body {\n    padding: 14px 16px;\n  }\n  .vm-title {\n    font-size: 14px;\n    font-weight: 900;\n    margin-bottom: 6px;\n    padding-bottom: 5px;\n    border-bottom: 1px solid var(--ink);\n  }\n  .vm-msg {\n    font-size: 12px;\n    line-height: 1.55;\n    white-space: pre-line;\n    color: var(--ink);\n    margin-bottom: 14px;\n  }\n  .vm-actions {\n    display: flex;\n    gap: 8px;\n    justify-content: flex-end;\n  }\n\n  /* Toast Stamp */\n  .toast-container {\n    position: fixed;\n    right: 12px;\n    bottom: 12px;\n    zoom: 0.89;\n    z-index: 200;\n    display: flex;\n    flex-direction: column;\n    gap: 6px;\n    pointer-events: none;\n  }\n  .toast-card {\n    background: var(--bg-card);\n    border: 2px solid var(--ink);\n    box-shadow: 3px 3px 0px var(--ink);\n    min-width: 210px;\n    max-width: 310px;\n    pointer-events: auto;\n    animation: slideIn 0.14s ease-out;\n  }\n  @keyframes slideIn {\n    from { transform: translateY(10px); opacity: 0; }\n    to { transform: translateY(0); opacity: 1; }\n  }\n  .toast-bar {\n    height: 4px;\n    background: var(--crimson);\n    border-bottom: 1px solid var(--ink);\n  }\n  .toast-content {\n    padding: 8px 10px;\n  }\n  .toast-title {\n    font-size: 11px;\n    font-weight: 800;\n    margin-bottom: 2px;\n  }\n  .toast-msg {\n    font-size: 11px;\n    line-height: 1.4;\n    white-space: pre-line;\n  }\n</style>\n</head>\n<body>\n\n<div class="banknote-shell">\n  <!-- 0. CUSTOM INTEGRATED SWISS TITLEBAR (FRAMELESS DRAGGABLE) -->\n  <div class="custom-titlebar pywebview-drag-region">\n    <div class="ct-brand">\n      <span class="ct-cross">┼</span>\n      <span>JIANYING AI PRO</span>\n    </div>\n    <div class="ct-controls">\n      <button class="ct-btn" title="最小化" onclick="pyCall(\'minimize_win\')">─</button>\n      <button class="ct-btn close" title="关闭" onclick="pyCall(\'close_win\')">✕</button>\n    </div>\n  </div>\n\n  <!-- 1. TOP & CENTER MAIN WORKSPACE -->\n  <div class="bn-center">\n    <div>\n      <div class="sn-bar">\n        <span class="sn-code">v2.0</span>\n        <span id="coord-badge" class="coord-stamp">● 未录制坐标</span>\n      </div>\n      <div class="title-bar">\n        <span class="main-title">JIANYING AI PRO</span>\n      </div>\n\n      <div class="bn-tabs">\n        <button class="bn-tab active" onclick="switchTab(0)">01 · 批量导出</button>\n        <button class="bn-tab" onclick="switchTab(1)">02 · 字幕工程</button>\n        <button class="bn-tab" onclick="switchTab(2)">03 · 双擎改名</button>\n        <button class="bn-tab" onclick="switchTab(3)">04 · 凭证参数</button>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 0: 批量导出 ==================== -->\n    <div id="panel-0" class="module-panel active">\n      <div class="ledger-box grow">\n        <div class="ledger-hdr">\n          <span>首页草稿队列</span>\n          <span id="queue-count" style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">0 项</span>\n        </div>\n        <div class="table-scroll">\n          <table class="voucher-table">\n            <thead>\n              <tr>\n                <th style="width:42px;">序号</th>\n                <th>草稿名称</th>\n                <th style="width:80px;text-align:right;">状态</th>\n              </tr>\n            </thead>\n            <tbody id="queue-tbody">\n              <tr><td colspan="3" class="empty-hint">尚未扫描草稿 · 请点击下方【AI 扫描草稿】解析剪映首页</td></tr>\n            </tbody>\n          </table>\n        </div>\n      </div>\n\n      <div class="action-row">\n        <button class="btn-voucher" onclick="pyCall(\'start_wizard\')">引导录制 [F8]</button>\n        <button class="btn-voucher" onclick="pyCall(\'scan_drafts\')">AI 扫描草稿</button>\n        <button id="btn-start-export" class="btn-voucher crimson flex-1" onclick="triggerExport()">▶ 此处执行</button>\n        <button class="btn-voucher ink" onclick="pyCall(\'stop_export\')">■ 中断</button>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 1: 字幕工程 ==================== -->\n    <div id="panel-1" class="module-panel">\n      <div style="display:flex;flex-direction:column;gap:8px;flex:1;">\n        <div class="ledger-box">\n          <div class="ledger-hdr">\n            <span>剪映草稿根目录</span>\n          </div>\n          <div class="field-row">\n            <input id="inp-draft-dir" class="voucher-input" type="text" value="D:\\JianyingPro Drafts" placeholder="选择剪映草稿目录..." />\n            <button class="btn-voucher ink" onclick="pyCall(\'browse_draft_dir\')">浏览目录</button>\n          </div>\n        </div>\n\n        <div class="ledger-box" style="flex:1;justify-content:center;">\n          <div class="ledger-hdr">\n            <span>字幕提取与无损隐藏</span>\n          </div>\n          <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">\n            <button class="btn-voucher crimson" style="padding:10px;" onclick="pyCall(\'trigger_extract_subs\')">\n              ┼ 提取 SRT 字幕 & 无损隐藏轨道 → 桌面/srt\n            </button>\n            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">\n              <button class="btn-voucher ink" style="padding:9px;" onclick="pyCall(\'trigger_fix_fonts\')">\n                ■ 统一字体 (Noto Sans Bold)\n              </button>\n              <button class="btn-voucher" style="padding:9px;" onclick="pyCall(\'trigger_unhide_tracks\')">\n                □ 解除所有字幕隐藏\n              </button>\n            </div>\n          </div>\n        </div>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 2: 双擎改名 ==================== -->\n    <div id="panel-2" class="module-panel">\n      <div class="ledger-box" style="margin-bottom:8px;">\n        <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:6px;">\n          <button id="mode-regex-btn" class="btn-voucher ink" style="padding:3px 12px;font-size:11px;" onclick="setRenameMode(\'正则匹配重命名\')">正则匹配</button>\n          <button id="mode-ai-btn" class="btn-voucher" style="padding:3px 12px;font-size:11px;" onclick="setRenameMode(\'AI 智能重命名\')">AI语义</button>\n        </div>\n\n        <!-- 正则匹配控制 -->\n        <div id="rename-regex-box">\n          <div class="field-row" style="margin-bottom:6px;">\n            <span style="font-size:11px;font-weight:700;width:38px;flex-shrink:0;">目录:</span>\n            <input id="inp-ren-folder" class="voucher-input" type="text" placeholder="选择包含视频或字幕的文件夹..." />\n            <button class="btn-voucher" onclick="pyCall(\'browse_rename_folder\')">浏览</button>\n          </div>\n          <div class="field-row">\n            <span style="font-size:11px;font-weight:700;width:38px;flex-shrink:0;">模板:</span>\n            <input id="inp-ren-fmt" class="voucher-input" type="text" value="短剧名称_第1集" placeholder="例：短剧名称_第1集" />\n            <button class="btn-voucher crimson" onclick="previewRegexRename()">规则预览</button>\n          </div>\n        </div>\n\n        <!-- AI语义控制 -->\n        <div id="rename-ai-box" style="display:none;">\n          <div class="field-row" style="margin-bottom:6px;">\n            <span style="font-size:11px;font-weight:700;width:38px;flex-shrink:0;">来源:</span>\n            <button class="btn-voucher" onclick="pyCall(\'select_ai_files\')">选择文件</button>\n            <button class="btn-voucher" onclick="pyCall(\'load_folder_for_ai\')">载入文件夹</button>\n            <span id="ai-file-count" style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--crimson);margin-left:4px;white-space:nowrap;">未选择</span>\n          </div>\n          <div class="field-row">\n            <span style="font-size:11px;font-weight:700;width:38px;flex-shrink:0;">格式:</span>\n            <input id="inp-ai-fmt" class="voucher-input" type="text" value="短剧名称_第X集" placeholder="例：短剧名称_第X集" />\n            <button id="btn-ai-preview" class="btn-voucher crimson" onclick="previewAiRename()">AI 预览</button>\n          </div>\n        </div>\n      </div>\n\n      <div class="ledger-box grow">\n        <div class="ledger-hdr">\n          <span>重命名对照表</span>\n          <span id="ren-plan-count" style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">0 个文件</span>\n        </div>\n        <div class="table-scroll">\n          <table class="voucher-table">\n            <thead>\n              <tr>\n                <th>原文件名</th>\n                <th>新文件名</th>\n                <th style="width:72px;text-align:center;">方式</th>\n              </tr>\n            </thead>\n            <tbody id="ren-tbody">\n              <tr><td colspan="3" class="empty-hint">请先配置上方目录与模板，点击【预览】生成重命名列表</td></tr>\n            </tbody>\n          </table>\n        </div>\n      </div>\n\n      <div class="action-row">\n        <button id="btn-exec-rename" class="btn-voucher crimson flex-1" disabled onclick="pyCall(\'trigger_exec_rename\')">\n          ▶ 执行批量重命名\n        </button>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 3: 凭证参数 ==================== -->\n    <div id="panel-3" class="module-panel">\n      <div class="ledger-box grow" style="justify-content:space-between;">\n        <div>\n          <div class="ledger-hdr">\n            <span>密钥与模型配置</span>\n          </div>\n\n          <div style="margin-top:4px;">\n            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">\n              <div>\n                <div style="font-size:12px;font-weight:800;">Gemini API Key</div>\n                <div style="font-size:10px;color:var(--amber);margin-top:2px;">默认为公用 Key，建议填入个人独立 Key 保障稳定</div>\n              </div>\n              <button class="btn-voucher ink" onclick="pyCall(\'open_api_url\')">获取 API Key ↗</button>\n            </div>\n            <div class="field-row">\n              <input id="inp-api-key" class="voucher-input" type="password" placeholder="AIzaSy..." />\n            </div>\n          </div>\n\n          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border-line);">\n            <div style="display:flex;justify-content:space-between;align-items:center;">\n              <div>\n                <div style="font-size:12px;font-weight:800;">推理模型选择</div>\n                <div style="font-size:10px;color:var(--muted);margin-top:2px;">用于首页草稿封面识别与 AI 批量改名</div>\n              </div>\n              <select id="sel-model" class="voucher-select" style="max-width:190px;">\n                <option value="gemini-3.5-flash">gemini-3.5-flash</option>\n                <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>\n                <option value="gemini-2.5-flash">gemini-2.5-flash</option>\n                <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>\n                <option value="gemini-3-flash">gemini-3-flash</option>\n                <option value="gemini-3.7-flash">gemini-3.7-flash</option>\n                <option value="gemini-3.8-flash">gemini-3.8-flash</option>\n              </select>\n            </div>\n          </div>\n        </div>\n\n        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1.5px solid var(--ink);padding-top:8px;">\n          <span style="font-size:10px;color:var(--muted);">作者: 塔奇 · 修改: 小马</span>\n          <button class="btn-voucher crimson" onclick="saveSettings()">┼ 保存设置</button>\n        </div>\n      </div>\n    </div>\n  </div>\n\n  <!-- 2. BOTTOM TELEMETRY & STATUS SECTION (置于主体之下) -->\n  <div class="bn-bottom">\n    <div class="bottom-meta-row">\n      <div class="wm-status">\n        <span class="wm-dot"></span>\n        <span>状态：</span>\n        <span id="status-text">就绪</span>\n      </div>\n      <div class="spec-inline">\n        <span>分辨率: <strong id="spec-res">2560×1440</strong></span>\n        <span>模型: <strong id="spec-model">GEMINI-3.5</strong></span>\n      </div>\n    </div>\n    <div id="audit-log" class="audit-log-box"></div>\n  </div>\n</div>\n\n<!-- CONFIRM MODAL -->\n<div id="modal-backdrop" class="modal-backdrop">\n  <div class="voucher-modal">\n    <div class="vm-hdr">\n      <span>┼ 操作确认</span>\n      <span>v2.0</span>\n    </div>\n    <div class="vm-body">\n      <div id="modal-title" class="vm-title">确认操作</div>\n      <div id="modal-msg" class="vm-msg">内容</div>\n      <div class="vm-actions">\n        <button id="modal-cancel-btn" class="btn-voucher" onclick="resolveModal(false)">取消</button>\n        <button id="modal-ok-btn" class="btn-voucher crimson" onclick="resolveModal(true)">确认</button>\n      </div>\n    </div>\n  </div>\n</div>\n\n<!-- TOAST CONTAINER -->\n<div id="toast-container" class="toast-container"></div>\n\n<script>\n  let selectedDraftIdx = 0;\n  let currentRenameMode = \'正则匹配重命名\';\n\n  function switchTab(idx) {\n    document.querySelectorAll(\'.bn-tab\').forEach((btn, i) => btn.classList.toggle(\'active\', i === idx));\n    document.querySelectorAll(\'.module-panel\').forEach((p, i) => p.classList.toggle(\'active\', i === idx));\n  }\n\n  function pyCall(method, ...args) {\n    if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {\n      return window.pywebview.api[method](...args);\n    }\n  }\n\n  /* Called from Python on startup */\n  window.initAppState = function(state) {\n    if (state.res) document.getElementById(\'spec-res\').textContent = state.res;\n    if (state.api_key !== undefined) document.getElementById(\'inp-api-key\').value = state.api_key;\n    if (state.api_model) {\n      document.getElementById(\'sel-model\').value = state.api_model;\n      document.getElementById(\'spec-model\').textContent = state.api_model.toUpperCase();\n    }\n    if (state.draft_dir) document.getElementById(\'inp-draft-dir\').value = state.draft_dir;\n    if (state.coords_ready) {\n      updateGuideBadge(\'● 坐标已就绪\', \'ready\');\n    }\n  };\n\n  window.updateGuideBadge = function(text, mode) {\n    const el = document.getElementById(\'coord-badge\');\n    el.textContent = text;\n    el.className = \'coord-stamp\' + (mode ? \' \' + mode : \'\');\n  };\n\n  window.appendLog = function(text) {\n    const box = document.getElementById(\'audit-log\');\n    box.textContent += text;\n    box.scrollTop = box.scrollHeight;\n  };\n\n  window.setStatus = function(text) {\n    document.getElementById(\'status-text\').textContent = text;\n  };\n\n  window.setDraftDirInput = function(path) {\n    document.getElementById(\'inp-draft-dir\').value = path;\n  };\n\n  window.setRenameFolderInput = function(path) {\n    document.getElementById(\'inp-ren-folder\').value = path;\n  };\n\n  window.setAiFileCount = function(text) {\n    document.getElementById(\'ai-file-count\').textContent = text;\n  };\n\n  window.setExportBtnState = function(enabled) {\n    document.getElementById(\'btn-start-export\').disabled = !enabled;\n  };\n\n  window.renderQueue = function(items) {\n    const tbody = document.getElementById(\'queue-tbody\');\n    document.getElementById(\'queue-count\').textContent = items.length + \' 项\';\n    if (!items.length) {\n      tbody.innerHTML = \'<tr><td colspan="3" class="empty-hint">尚未扫描草稿 · 请点击下方【AI 扫描草稿】解析剪映首页</td></tr>\';\n      return;\n    }\n    selectedDraftIdx = 0;\n    tbody.innerHTML = \'\';\n    items.forEach((it, idx) => {\n      const tr = document.createElement(\'tr\');\n      if (idx === selectedDraftIdx) tr.classList.add(\'selected\');\n      tr.id = \'q-row-\' + idx;\n      tr.onclick = () => selectQueueRow(idx);\n      tr.innerHTML = `\n        <td style="font-family:var(--font-mono);">${String(idx + 1).padStart(2, \'0\')}</td>\n        <td>${escapeHtml(it.name)}</td>\n        <td id="q-st-${idx}" style="font-family:var(--font-mono);text-align:right;">${escapeHtml(it.st)}</td>\n      `;\n      tbody.appendChild(tr);\n    });\n  };\n\n  window.updateQueueItemStatus = function(idx, st) {\n    const cell = document.getElementById(\'q-st-\' + idx);\n    if (cell) cell.textContent = st;\n  };\n\n  function selectQueueRow(idx) {\n    selectedDraftIdx = idx;\n    document.querySelectorAll(\'#queue-tbody tr\').forEach((tr, i) => {\n      tr.classList.toggle(\'selected\', i === idx);\n    });\n  }\n\n  function triggerExport() {\n    pyCall(\'request_start_export\', selectedDraftIdx);\n  }\n\n  /* Subtitle inputs */\n  window.getDraftDirValue = function() {\n    return document.getElementById(\'inp-draft-dir\').value.trim();\n  };\n\n  /* Rename Engine */\n  window.setRenameMode = function(mode) {\n    currentRenameMode = mode;\n    const isRegex = (mode === \'正则匹配重命名\');\n    document.getElementById(\'rename-regex-box\').style.display = isRegex ? \'block\' : \'none\';\n    document.getElementById(\'rename-ai-box\').style.display = isRegex ? \'none\' : \'block\';\n    document.getElementById(\'mode-regex-btn\').className = isRegex ? \'btn-voucher ink\' : \'btn-voucher\';\n    document.getElementById(\'mode-ai-btn\').className = !isRegex ? \'btn-voucher ink\' : \'btn-voucher\';\n    pyCall(\'on_rename_mode_change\', mode);\n  };\n\n  function previewRegexRename() {\n    const folder = document.getElementById(\'inp-ren-folder\').value.trim();\n    const tpl = document.getElementById(\'inp-ren-fmt\').value.trim();\n    pyCall(\'regex_preview\', folder, tpl);\n  }\n\n  function previewAiRename() {\n    const folder = document.getElementById(\'inp-ren-folder\').value.trim();\n    const fmt = document.getElementById(\'inp-ai-fmt\').value.trim();\n    pyCall(\'ai_preview\', folder, fmt);\n  }\n\n  window.setAiPreviewBusy = function(busy) {\n    const btn = document.getElementById(\'btn-ai-preview\');\n    btn.disabled = busy;\n    btn.textContent = busy ? \'⏳ 思考中...\' : \'AI 预览\';\n  };\n\n  window.renderRenamePlan = function(plan) {\n    const tbody = document.getElementById(\'ren-tbody\');\n    document.getElementById(\'ren-plan-count\').textContent = plan.length + \' 个文件\';\n    document.getElementById(\'btn-exec-rename\').disabled = (plan.length === 0);\n    if (!plan.length) {\n      tbody.innerHTML = \'<tr><td colspan="3" class="empty-hint">没有可预览的重命名计划</td></tr>\';\n      return;\n    }\n    tbody.innerHTML = \'\';\n    plan.forEach(item => {\n      const tr = document.createElement(\'tr\');\n      tr.innerHTML = `\n        <td>${escapeHtml(item.old_name)}</td>\n        <td style="color:var(--crimson);font-weight:700;">${escapeHtml(item.new_name)}</td>\n        <td style="font-family:var(--font-mono);font-size:10px;text-align:center;">${escapeHtml(item.mode)}</td>\n      `;\n      tbody.appendChild(tr);\n    });\n  };\n\n  function saveSettings() {\n    const key = document.getElementById(\'inp-api-key\').value.trim();\n    const model = document.getElementById(\'sel-model\').value;\n    document.getElementById(\'spec-model\').textContent = model.toUpperCase();\n    pyCall(\'save_settings\', key, model);\n  }\n\n  /* Modal & Toast */\n  window.showVoucherModal = function(title, message, showCancel) {\n    document.getElementById(\'modal-title\').textContent = title;\n    document.getElementById(\'modal-msg\').textContent = message;\n    document.getElementById(\'modal-cancel-btn\').style.display = showCancel ? \'inline-flex\' : \'none\';\n    document.getElementById(\'modal-ok-btn\').textContent = showCancel ? \'确认\' : \'我已知晓\';\n    document.getElementById(\'modal-backdrop\').classList.add(\'active\');\n  };\n\n  function resolveModal(confirmed) {\n    document.getElementById(\'modal-backdrop\').classList.remove(\'active\');\n    pyCall(\'on_modal_result\', confirmed);\n  }\n\n  window.showToast = function(title, message, color, duration) {\n    const container = document.getElementById(\'toast-container\');\n    const card = document.createElement(\'div\');\n    card.className = \'toast-card\';\n    card.innerHTML = `\n      <div class="toast-bar" style="background:${color || \'#9E1B16\'};"></div>\n      <div class="toast-content">\n        <div class="toast-title" style="color:${color || \'#9E1B16\'};">┼ ${escapeHtml(title)}</div>\n        <div class="toast-msg">${escapeHtml(message)}</div>\n      </div>\n    `;\n    container.appendChild(card);\n    setTimeout(() => {\n      card.remove();\n    }, duration || 4000);\n  };\n\n  function escapeHtml(str) {\n    return String(str || \'\')\n      .replace(/&/g, \'&amp;\')\n      .replace(/</g, \'&lt;\')\n      .replace(/>/g, \'&gt;\')\n      .replace(/"/g, \'&quot;\');\n  }\n\n  window.addEventListener(\'pywebviewready\', function() {\n    pyCall(\'ui_ready\');\n  });\n</script>\n</body>\n</html>'
+
+# ─── 主应用 (PyWebView / Windows Edge WebView2 瑞士防伪账本架构) ────────
+class _TkProxyWidget:
+    """兼容原有代码中对 self.status / self.start_btn / self.guide_lbl 等控件的调用"""
+    def __init__(self, app, role):
+        self._app = app
+        self._role = role
+        self._value = ""
+
+    def get(self):
+        if self._role == "draft_dir":
+            return self._app.draft_dir_val
+        if self._role == "api_key":
+            return self._app.api_key
+        if self._role == "api_model":
+            return self._app.api_model
+        if self._role == "ren_mode":
+            return self._app.ren_mode_val
+        if self._role == "rename_folder":
+            return self._app.rename_folder_val
+        if self._role == "fmt":
+            return self._app.fmt_val
+        if self._role == "ai_fmt":
+            return self._app.ai_fmt_val
+        return self._value
+
+    def set(self, val):
+        self._value = val
+
+    def configure(self, **kwargs):
+        if self._role == "status" and "text" in kwargs:
+            self._app._js("setStatus", kwargs["text"])
+        elif self._role == "start_btn" and "state" in kwargs:
+            self._app._js("setExportBtnState", kwargs["state"] == "normal")
+        elif self._role == "guide_lbl" and "text" in kwargs:
+            txt = kwargs["text"]
+            mode = "ready" if "就绪" in txt or "VERIFIED" in txt else ("recording" if "/" in txt else "")
+            self._app._js("updateGuideBadge", txt, mode)
+        elif self._role == "file_lbl" and "text" in kwargs:
+            self._app._js("setAiFileCount", kwargs["text"])
+        elif self._role == "ai_preview_btn":
+            if "state" in kwargs:
+                self._app._js("setAiPreviewBusy", kwargs["state"] != "normal")
+
+
+class _JsBridgeApi:
+    """专供 pywebview 暴露给前端 JS 的轻量桥接类（不包含 window 引用以避免递归内省）"""
+    def __init__(self, app):
+        self._app = app
+
+    def ui_ready(self):
+        return self._app.ui_ready()
+
+    def on_modal_result(self, confirmed):
+        return self._app.on_modal_result(confirmed)
+
+    def start_wizard(self):
+        return self._app.start_wizard()
+
+    def scan_drafts(self):
+        return self._app.scan_drafts()
+
+    def request_start_export(self, idx):
+        return self._app.request_start_export(idx)
+
+    def stop_export(self):
+        return self._app.stop_export()
+
+    def browse_draft_dir(self):
+        return self._app.browse_draft_dir()
+
+    def trigger_extract_subs(self):
+        return self._app.trigger_extract_subs()
+
+    def trigger_fix_fonts(self):
+        return self._app.trigger_fix_fonts()
+
+    def trigger_unhide_tracks(self):
+        return self._app.trigger_unhide_tracks()
+
+    def on_rename_mode_change(self, mode):
+        return self._app.on_rename_mode_change(mode)
+
+    def browse_rename_folder(self):
+        return self._app.browse_rename_folder()
+
+    def select_ai_files(self):
+        return self._app.select_ai_files()
+
+    def load_folder_for_ai(self):
+        return self._app.load_folder_for_ai()
+
+    def regex_preview(self, folder, template):
+        return self._app.regex_preview(folder, template)
+
+    def ai_preview(self, folder, fmt):
+        return self._app.ai_preview(folder, fmt)
+
+    def trigger_exec_rename(self):
+        return self._app.trigger_exec_rename()
+
+    def open_api_url(self):
+        return self._app.open_api_url()
+
+    def minimize_win(self):
+        if self.window:
+            self.window.minimize()
+
+    def close_win(self):
+        if self.window:
+            self.window.destroy()
+        os._exit(0)
+
+    def save_settings(self, key, model):
+        return self._app.save_settings(key, model)
+
+    def minimize_win(self):
+        return self._app.minimize_win()
+
+    def close_win(self):
+        return self._app.close_win()
+
+
+class App:
     def __init__(self):
-        super().__init__()
-        ctk.set_appearance_mode("light")	
-        ctk.set_default_color_theme("blue")
-        
-        self.title(f"剪映 AI ToolBox  v{VERSION}")
-        self.geometry("520x520")
-        self.resizable(False, False)
-        self.attributes('-topmost', True)
-        
-        # 屏幕右下角定位
-        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-        self.geometry(f"+{sw-540}+{sh-580}")
-        
+        # 瑞士法郎 / 瑞士护照配色常量
+        global C_PRIMARY, C_SUCCESS, C_DANGER, C_WARN
+        C_PRIMARY = "#9E1B16"
+        C_SUCCESS = "#0B6E4F"
+        C_DANGER  = "#B91C1C"
+        C_WARN    = "#B45309"
+
+        self.window = None
+        self._ui_ready = False
+        self._modal_cb = None
+
         # 默认推荐坐标 (基于 2560x1440)
         self.default_res = (2560, 1440)
-        self.default_coords = {"export": [2420, 19], "confirm": [1468, 1028], "popup_close": [1548, 951], "close_btn": None, "draft_close": [2538, 18]}
+        self.default_coords = {
+            "export": [2420, 19],
+            "confirm": [1468, 1028],
+            "popup_close": [1548, 951],
+            "close_btn": None,
+            "draft_close": [2538, 18],
+        }
         self.default_color = (99, 149, 200)
-        
-        # 数据
+
         self.sys_res = pyautogui.size()
         if self.sys_res == self.default_res:
             self.coords = self.default_coords.copy()
             self.close_color = self.default_color
         else:
-            self.coords = {"export": None, "confirm": None, "popup_close": None, "close_btn": None, "draft_close": None}
+            self.coords = {
+                "export": None,
+                "confirm": None,
+                "popup_close": None,
+                "close_btn": None,
+                "draft_close": None,
+            }
             self.close_color = None
-            
+
         self.stop_flag = False
         self.rec_state = None
         self.api_key = DEFAULT_KEY
         self.api_model = "gemini-3.5-flash"
-        self.drafts = []          
+        self.drafts = []
         self.sel_files = []
+        self.rename_folder = ""
+        self.rename_plan = []
         self.first_run = True
-        self.first_sub = True
-        
+        self.first_sub = False
+
+        # 状态值与兼容代理对象
+        self.draft_dir_val = r"D:\JianyingPro Drafts"
+        self.ren_mode_val = "正则匹配重命名"
+        self.rename_folder_val = ""
+        self.fmt_val = "短剧名称_第1集"
+        self.ai_fmt_val = "短剧名称_第X集"
+
+        self.status = _TkProxyWidget(self, "status")
+        self.start_btn = _TkProxyWidget(self, "start_btn")
+        self.guide_lbl = _TkProxyWidget(self, "guide_lbl")
+        self.file_lbl = _TkProxyWidget(self, "file_lbl")
+        self.ai_preview_btn = _TkProxyWidget(self, "ai_preview_btn")
+        self.draft_dir = _TkProxyWidget(self, "draft_dir")
+        self.key_entry = _TkProxyWidget(self, "api_key")
+        self.model_combo = _TkProxyWidget(self, "api_model")
+        self.ren_mode_seg = _TkProxyWidget(self, "ren_mode")
+        self.rename_folder_entry = _TkProxyWidget(self, "rename_folder")
+        self.fmt_entry = _TkProxyWidget(self, "fmt")
+        self.ai_fmt_entry = _TkProxyWidget(self, "ai_fmt")
+
         self._load_cfg()
-        self._build_ui()
-        
-        # 启动提示 (稍加延迟确保窗口已渲染)
-        self.after(500, self._show_startup_guide)
-        self.after(800, self._check_auth)
-        
-        # 热键
+
+        # 热键监听
         self.kb = keyboard.Listener(on_release=self._on_key)
         self.kb.start()
 
-    # ─── 授权与自毁逻辑移到类内，方便使用内建弹窗 ───
+    # ─── WebView2 桥接辅助 ───
+    def _js(self, func_name, *args):
+        if not self.window or not self._ui_ready:
+            return
+        try:
+            args_json = ", ".join(json.dumps(a, ensure_ascii=False) for a in args)
+            self.window.evaluate_js(f"window.{func_name} && window.{func_name}({args_json});")
+        except Exception:
+            pass
+
+    def after(self, ms, func, *args):
+        if ms <= 0:
+            threading.Thread(target=func, args=args, daemon=True).start()
+        else:
+            t = threading.Timer(ms / 1000.0, func, args=args)
+            t.daemon = True
+            t.start()
+
+    def _log(self, msg):
+        print(msg)
+
+    class _LogWriter:
+        def __init__(self, app):
+            self.app = app
+        def write(self, s):
+            if s:
+                self.app._js("appendLog", s)
+        def flush(self):
+            pass
+
+    # ─── JS API 暴露方法 (供前端 WebView2 调用) ───
+    def ui_ready(self):
+        self._ui_ready = True
+        self._snap_to_bottom_right()
+        sys.stdout = self._LogWriter(self)
+        self._js("initAppState", {
+            "res": f"{self.sys_res[0]}×{self.sys_res[1]}",
+            "api_key": self.api_key,
+            "api_model": self.api_model,
+            "draft_dir": self.draft_dir_val,
+            "coords_ready": bool(self.coords.get("export")),
+        })
+        self.after(400, self._show_startup_guide)
+        self.after(800, self._check_auth)
+
+    def on_modal_result(self, confirmed):
+        cb = self._modal_cb
+        self._modal_cb = None
+        if confirmed and cb:
+            threading.Thread(target=cb, daemon=True).start()
+
+    def start_wizard(self):
+        self._start_wizard()
+
+    def scan_drafts(self):
+        self._scan_thread()
+
+    def request_start_export(self, idx):
+        self._start_export(idx)
+
+    def stop_export(self):
+        self._stop()
+
+    def browse_draft_dir(self):
+        res = self.window.create_file_dialog(webview.FOLDER_DIALOG, directory=self.draft_dir_val if os.path.isdir(self.draft_dir_val) else "")
+        if res and len(res) > 0:
+            self.draft_dir_val = res[0]
+            self._js("setDraftDirInput", self.draft_dir_val)
+
+    def trigger_extract_subs(self):
+        try:
+            val = self.window.evaluate_js("window.getDraftDirValue()")
+            if val:
+                self.draft_dir_val = val
+        except Exception:
+            pass
+        self._sub_thread()
+
+    def trigger_fix_fonts(self):
+        try:
+            val = self.window.evaluate_js("window.getDraftDirValue()")
+            if val:
+                self.draft_dir_val = val
+        except Exception:
+            pass
+        self._fix_font_thread()
+
+    def trigger_unhide_tracks(self):
+        try:
+            val = self.window.evaluate_js("window.getDraftDirValue()")
+            if val:
+                self.draft_dir_val = val
+        except Exception:
+            pass
+        self._unhide_tracks_thread()
+
+    def on_rename_mode_change(self, mode):
+        self.ren_mode_val = mode
+        self.rename_plan = []
+        self._js("renderRenamePlan", [])
+
+    def browse_rename_folder(self):
+        res = self.window.create_file_dialog(webview.FOLDER_DIALOG)
+        if res and len(res) > 0:
+            self.rename_folder_val = res[0]
+            self._js("setRenameFolderInput", self.rename_folder_val)
+            self.rename_plan = []
+            self._js("renderRenamePlan", [])
+
+    def select_ai_files(self):
+        file_types = ("视频/字幕文件 (*.mp4;*.mov;*.avi;*.mkv;*.srt;*.ass;*.wav;*.mp3)", "All files (*.*)")
+        res = self.window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=file_types)
+        if res:
+            self.sel_files = list(res)
+            self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
+            self.rename_plan = []
+            self._js("renderRenamePlan", [])
+
+    def load_folder_for_ai(self, folder=None):
+        if not folder or not os.path.isdir(folder):
+            res = self.window.create_file_dialog(webview.FOLDER_DIALOG)
+            if res and len(res) > 0:
+                folder = res[0]
+        if folder and os.path.isdir(folder):
+            self.rename_folder_val = folder
+            self._js("setRenameFolderInput", folder)
+            valid_exts = ('.mp4', '.mov', '.avi', '.mkv', '.srt', '.ass', '.wav', '.mp3')
+            files = [
+                os.path.join(folder, f) for f in sorted(os.listdir(folder))
+                if os.path.isfile(os.path.join(folder, f)) and f.lower().endswith(valid_exts)
+            ]
+            if files:
+                self.sel_files = files
+                self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
+                self.rename_plan = []
+                self._js("renderRenamePlan", [])
+                self._log(f"已从文件夹载入 {len(files)} 个文件用于 AI 重命名")
+            else:
+                self._show_toast("未找到有效文件", "该文件夹下没有常见的视频或字幕文件", C_WARN)
+
+    def regex_preview(self, folder, template):
+        self.rename_folder_val = (folder or "").strip().strip('"')
+        self.fmt_val = (template or "").strip()
+        self._regex_preview_thread()
+
+    def ai_preview(self, folder, fmt):
+        if folder:
+            self.rename_folder_val = folder.strip().strip('"')
+        if fmt:
+            self.ai_fmt_val = fmt.strip()
+        self._ai_preview_thread()
+
+    def trigger_exec_rename(self):
+        if not self.rename_plan:
+            return
+        current_mode = self.ren_mode_val
+        self._ask_yes_no(
+            f"确认【{current_mode}】",
+            f"将使用【{current_mode}】修改 {len(self.rename_plan)} 个文件，是否继续？",
+            self._do_exec_rename
+        )
+
+    def open_api_url(self):
+        import webbrowser
+        webbrowser.open("https://aistudio.google.com/api-keys")
+
+    def minimize_win(self):
+        if self.window:
+            self.window.minimize()
+
+    def close_win(self):
+        if self.window:
+            self.window.destroy()
+        os._exit(0)
+
+    def save_settings(self, key, model):
+        self.api_key = (key or "").strip() or DEFAULT_KEY
+        self.api_model = model or "gemini-3.5-flash"
+        self._save_cfg()
+        self._show_toast("凭证已保存", "配置已写入本地 config.json", C_SUCCESS)
+
+    # ─── 授权与自毁逻辑 ───
     def _check_auth(self):
         if "placeholder" in AUTH_URL: return
         try:
-            # 优先调用 GitHub REST API（无缓存，实时），失败则降级使用 Raw 域名
             api_url = "https://api.github.com/repos/Kirota233/JianYing-AI-Pro/contents/auth.json?ref=master"
             headers = {"Cache-Control": "no-cache"}
             try:
@@ -369,7 +700,7 @@ class App(ctk.CTk):
             if d.get("status") == "destroy":  self._self_destruct()
             if d.get("status") == "blocked":
                 self._show_toast("授权失效", "该软件未获授权或已过期", C_DANGER, 5000)
-                self.after(5000, sys.exit)
+                self.after(5000, os._exit, 0)
             rv, uu = d.get("version", VERSION), d.get("update_url", "")
             if rv != VERSION and uu:
                 self._ask_yes_no("发现新版本", f"v{rv} 可用，是否立即更新？", lambda: self._update(uu))
@@ -439,38 +770,15 @@ del /f /q "%~f0" >nul 2>&1
         except Exception: pass
         os._exit(0)
 
-    # ─── 程序内右下角 Toast 提示框 ───
     def _show_toast(self, title, message, color=C_PRIMARY, duration=4000):
-        toast = ctk.CTkFrame(self, fg_color=C_CARD, border_color=color, border_width=2, corner_radius=8)
-        toast.place(relx=0.96, rely=0.94, anchor="se") # 右下角内嵌
-        
-        hdr = ctk.CTkFrame(toast, fg_color="transparent")
-        hdr.pack(fill="x", padx=12, pady=(10, 2))
-        ctk.CTkLabel(hdr, text=title, font=("Segoe UI", 12, "bold"), text_color=color).pack(side="left")
-        
-        ctk.CTkLabel(toast, text=message, font=("Segoe UI", 11), text_color=C_TEXT, justify="left").pack(padx=12, pady=(0, 10), anchor="w")
-        self.after(duration, toast.destroy)
+        self._js("showToast", title, message, color, duration)
 
-    # ─── 程序内自定义确认框 ───
     def _ask_yes_no(self, title, message, on_yes, show_cancel=True):
-        dialog = ctk.CTkFrame(self, fg_color=C_CARD, corner_radius=12, border_width=2, border_color=C_BORDER)
-        dialog.place(relx=0.5, rely=0.5, anchor="center")
-        
-        ctk.CTkLabel(dialog, text=title, font=("Segoe UI", 14, "bold"), text_color=C_TEXT).pack(pady=(20, 10))
-        ctk.CTkLabel(dialog, text=message, font=("Segoe UI", 12), text_color=C_TEXT, justify="left").pack(pady=(0, 20), padx=24)
-        
-        bf = ctk.CTkFrame(dialog, fg_color="transparent")
-        bf.pack(fill="x", padx=20, side="bottom", pady=(0, 20))
-        
-        def _yes(): dialog.destroy(); on_yes()
-        def _no(): dialog.destroy()
-        
-        if show_cancel:
-            ctk.CTkButton(bf, text="取消", fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER, width=100, command=_no).pack(side="left", expand=True, padx=5)
-        ctk.CTkButton(bf, text="我已知晓" if not show_cancel else "确认", fg_color=C_PRIMARY, hover_color="#2563eb", width=100, command=_yes).pack(side="right", expand=True, padx=5)
+        self._modal_cb = on_yes
+        self._js("showVoucherModal", title, message, show_cancel)
 
     def _client(self):
-        k = self.key_entry.get().strip() or DEFAULT_KEY
+        k = (self.api_key or "").strip() or DEFAULT_KEY
         return genai.Client(api_key=k)
 
     def _show_startup_guide(self):
@@ -479,7 +787,7 @@ del /f /q "%~f0" >nul 2>&1
             self._save_cfg()
             
             if self.sys_res == self.default_res:
-                self.after(500, lambda: self._show_toast("✅ 坐标已自动适配", "检测到您的分辨率与默认配置匹配\n已自动为您填入推荐坐标，无需再次录制！", C_SUCCESS, 6000))
+                self.after(500, lambda: self._show_toast("坐标已自动适配", "检测到您的分辨率与默认配置匹配\n已自动为您填入推荐坐标，无需再次录制！", C_SUCCESS, 6000))
                 
             msg = (
                 "1. 请不要把本程序窗口遮挡住剪映的草稿封面\n"
@@ -489,7 +797,7 @@ del /f /q "%~f0" >nul 2>&1
                 "• 强烈建议在设置中填入您自己的 API Key\n"
                 "• 使用 AI 功能时必须开启代理环境(科学上网)"
             )
-            self._ask_yes_no("⚠️ 首次运行须知", msg, lambda: None, show_cancel=False)
+            self._ask_yes_no("首次运行须知", msg, lambda: None, show_cancel=False)
 
     def _load_cfg(self):
         if os.path.exists(CFG_FILE):
@@ -507,486 +815,24 @@ del /f /q "%~f0" >nul 2>&1
                     self.close_color = tuple(loaded_color)
                 self.api_key = d.get("api_key", DEFAULT_KEY)
                 self.first_run = d.get("first_run", True)
-                self.first_sub = d.get("first_sub", True)
+                self.first_sub = False
                 self.api_model = d.get("api_model", "gemini-3.5-flash")
             except: pass
 
     def _save_cfg(self):
         try:
-            if hasattr(self, 'model_combo'): self.api_model = self.model_combo.get()
             with open(CFG_FILE, "w", encoding='utf-8') as f:
                 json.dump({"coords": self.coords, "color": self.close_color,
-                        "api_key": self.key_entry.get().strip(),
+                        "api_key": (self.api_key or "").strip(),
                         "first_run": self.first_run,
-                        "first_sub": getattr(self, 'first_sub', True),
+                        "first_sub": False,
                         "api_model": getattr(self, 'api_model', "gemini-3.5-flash")}, f)
         except: pass
 
-    # ═══════════════════════ UI 构建 ═══════════════════════
-    def _build_ui(self):
-        self.configure(fg_color=C_BG)
-        
-        # ── Tabview ──
-        self.tabs = ctk.CTkTabview(self, fg_color=C_BG, segmented_button_fg_color=C_CARD,
-                                    segmented_button_selected_color=C_PRIMARY,
-                                    segmented_button_unselected_color=C_CARD,
-                                    corner_radius=12)
-        self.tabs.pack(fill="both", expand=True, padx=12, pady=(4, 8))
-        
-        self.tabs.add("导出")
-        self.tabs.add("字幕")
-        self.tabs.add("重命名")
-        self.tabs.add("设置")
-        
-        self._build_export_tab()
-        self._build_subtitle_tab()
-        self._build_rename_tab()
-        self._build_settings_tab()
-        
-        # ── 底部状态栏 ──
-        bar = ctk.CTkFrame(self, fg_color=C_CARD, corner_radius=0, height=26)
-        bar.pack(fill="x", side="bottom")
-        bar.pack_propagate(False)
-        self.status = ctk.CTkLabel(bar, text="就绪", font=("Segoe UI", 10), text_color=C_MUTED)
-        self.status.pack(side="left", padx=12)
-
-    # ────────── 导出页 ──────────
-    def _build_export_tab(self):
-        tab = self.tabs.tab("导出")
-        
-        # 坐标录制卡片
-        card1 = self._card(tab)
-        card1.pack(fill="x", padx=4, pady=(2, 4))
-        
-        row = ctk.CTkFrame(card1, fg_color="transparent")
-        row.pack(fill="x")
-        
-        self.guide_lbl = ctk.CTkLabel(row, text="● 未录制坐标", font=("Segoe UI", 12),
-                                       text_color=C_DANGER, anchor="w")
-        self.guide_lbl.pack(side="left", fill="x", expand=True)
-        
-        ctk.CTkButton(row, text="引导录制 F8", width=100, height=28, corner_radius=6,
-                      fg_color=C_PRIMARY, command=self._start_wizard,
-                      font=("Segoe UI", 11)).pack(side="right")
-        
-        if self.coords.get("export"):
-            self.guide_lbl.configure(text="● 坐标已就绪", text_color=C_SUCCESS)
-    
-        # 任务队列卡片
-        card2 = self._card(tab)
-        card2.pack(fill="both", expand=True, padx=4, pady=4)
-        
-        # Treeview (用 ttk 但自定义样式)
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("Q.Treeview", background=C_CARD, foreground=C_TEXT,
-                         fieldbackground=C_CARD, borderwidth=0, font=("Segoe UI", 10),
-                         rowheight=26)
-        style.configure("Q.Treeview.Heading", background=C_BG, foreground=C_MUTED,
-                         font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat")
-        style.map("Q.Treeview", background=[("selected", "#dbeafe")],
-                   foreground=[("selected", C_PRIMARY)])
-        
-        tf = ctk.CTkFrame(card2, fg_color="transparent")
-        tf.pack(fill="both", expand=True, pady=(4, 4), padx=4)
-        
-        cols = ("no", "name", "st")
-        self.queue = ttk.Treeview(tf, columns=cols, show="headings", height=4,
-                                   selectmode="browse", style="Q.Treeview")
-        self.queue.heading("no", text="#")
-        self.queue.heading("name", text="草稿名称")
-        self.queue.heading("st", text="状态")
-        self.queue.column("no", width=32, anchor="center", minwidth=32)
-        self.queue.column("name", width=240, minwidth=100)
-        self.queue.column("st", width=60, anchor="center", minwidth=60)
-        
-        qsb = ttk.Scrollbar(tf, orient="vertical", command=self.queue.yview)
-        self.queue.configure(yscrollcommand=qsb.set)
-        self.queue.pack(side="left", fill="both", expand=True)
-        qsb.pack(side="right", fill="y")
-        
-        ctk.CTkButton(card2, text="📸  AI 扫描首页草稿", height=30, corner_radius=6,
-                      fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
-                      font=("Segoe UI", 11), command=self._scan_thread).pack(fill="x", padx=4, pady=(0, 4))
-        
-        # 控制按钮
-        bf = ctk.CTkFrame(tab, fg_color="transparent")
-        bf.pack(fill="x", padx=4, pady=4)
-        
-        self.start_btn = ctk.CTkButton(bf, text="▶  从选中项开始导出", height=36,
-                                        corner_radius=8, fg_color=C_SUCCESS,
-                                        hover_color="#16a34a", font=("Segoe UI", 12, "bold"),
-                                        command=self._start_export)
-        self.start_btn.pack(side="left", fill="x", expand=True, padx=(0, 4))
-        
-        ctk.CTkButton(bf, text="⏹ 中断", width=70, height=36, corner_radius=8,
-                      fg_color=C_DANGER, hover_color="#dc2626",
-                      font=("Segoe UI", 12, "bold"), command=self._stop).pack(side="right")
-    
-        # 日志
-        card3 = self._card(tab)
-        card3.pack(fill="both", expand=True, padx=4, pady=(2, 2))
-        
-        self.log = ctk.CTkTextbox(card3, height=60, corner_radius=6, font=("Consolas", 10),
-                                   fg_color=C_LOG_BG, text_color=C_TEXT, border_width=1,
-                                   border_color=C_BORDER, state="disabled",
-                                   wrap="word")
-        self.log.pack(fill="both", expand=True, padx=4, pady=4)
-        
-        # 重定向 stdout
-        sys.stdout = self._LogWriter(self.log)
-
-    # ────────── 字幕页 ──────────
-    def _build_subtitle_tab(self):
-        tab = self.tabs.tab("字幕")
-        
-        card = self._card(tab)
-        card.pack(fill="x", padx=4, pady=(4, 8))
-        
-        ctk.CTkLabel(card, text="剪映草稿路径", font=("Segoe UI", 12, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(8,0))
-        
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=8, pady=(6, 8))
-        self.draft_dir = ctk.CTkEntry(row, placeholder_text="选择草稿目录...",
-                                       corner_radius=6, border_color=C_BORDER)
-        self.draft_dir.insert(0, r"D:\JianyingPro Drafts")
-        self.draft_dir.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        ctk.CTkButton(row, text="...", width=32, height=28, corner_radius=6,
-                      fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
-                      command=self._browse_dir).pack(side="right")
-
-        btn_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=4, pady=10)
-        
-        ctk.CTkButton(btn_frame, text="📥  提取字幕 & 隐藏轨道 → 桌面/srt", height=36,
-                      corner_radius=8, fg_color=C_WARN, hover_color="#d97706",
-                      font=("Segoe UI", 12, "bold"), text_color="#ffffff",
-                      command=self._sub_thread).pack(fill="x", pady=(0, 6))
-
-        btn_frame2 = ctk.CTkFrame(btn_frame, fg_color="transparent")
-        btn_frame2.pack(fill="x")
-        
-        ctk.CTkButton(btn_frame2, text="🎨 统一字体 (Noto Sans Bold)", height=36,
-                      corner_radius=8, fg_color=C_PRIMARY, hover_color="#2563eb",
-                      font=("Segoe UI", 12, "bold"), text_color="#ffffff",
-                      command=self._fix_font_thread).pack(side="left", fill="x", expand=True, padx=(0, 3))
-                      
-        ctk.CTkButton(btn_frame2, text="👁️ 解除所有字幕隐藏", height=36,
-                      corner_radius=8, fg_color="#10b981", hover_color="#059669",
-                      font=("Segoe UI", 12, "bold"), text_color="#ffffff",
-                      command=self._unhide_tracks_thread).pack(side="right", fill="x", expand=True, padx=(3, 0))
-        
-        # 说明
-        info_card = self._card(tab)
-        info_card.pack(fill="x", padx=4)
-        for t in ["提取文本为 SRT 格式，并隐藏原草稿字幕轨道",
-                   "统一字体：无差别替换所有草稿字体为 Noto Sans Bold",
-                   "解除隐藏：恢复所有被隐藏(闭眼)的字幕轨道显示"]:
-            ctk.CTkLabel(info_card, text=f"·  {t}", font=("Segoe UI", 11),
-                         text_color=C_MUTED, anchor="w").pack(fill="x", padx=8, pady=2)
-                         
-        card_log = self._card(tab)
-        card_log.pack(fill="both", expand=True, padx=4, pady=(6, 2))
-        self.sub_log = ctk.CTkTextbox(card_log, height=60, corner_radius=6, font=("Consolas", 10),
-                                   fg_color=C_LOG_BG, text_color=C_TEXT, border_width=1,
-                                   border_color=C_BORDER, state="disabled", wrap="word")
-        self.sub_log.pack(fill="both", expand=True, padx=4, pady=4)
-        sys.stdout = self._LogWriter(self.log, self.sub_log) if hasattr(self, 'log') else sys.stdout
-
-    def _browse_dir(self):
-        d = filedialog.askdirectory(initialdir=self.draft_dir.get())
-        if d:
-            self.draft_dir.delete(0, "end"); self.draft_dir.insert(0, d)
-
-    # ────────── 重命名页 ──────────
-    def _build_rename_tab(self):
-        tab = self.tabs.tab("重命名")
-        self.rename_folder = ""
-        self.rename_plan = []
-
-        # 模式切换条 (明显标出：正则匹配重命名 vs AI 智能重命名)
-        card_mode = self._card(tab)
-        card_mode.pack(fill="x", padx=4, pady=(4, 4))
-        mode_row = ctk.CTkFrame(card_mode, fg_color="transparent")
-        mode_row.pack(fill="x", padx=8, pady=6)
-        ctk.CTkLabel(mode_row, text="模式选择:", font=("Segoe UI", 12, "bold"), text_color=C_TEXT).pack(side="left", padx=(0, 8))
-        self.ren_mode_seg = ctk.CTkSegmentedButton(
-            mode_row,
-            values=["正则匹配重命名", "AI 智能重命名"],
-            command=self._on_ren_mode_change,
-            font=("Segoe UI", 11, "bold"),
-            height=28
-        )
-        self.ren_mode_seg.set("正则匹配重命名")
-        self.ren_mode_seg.pack(side="left", fill="x", expand=True)
-
-        # 容器框架，用于动态切换两种模式的输入面板
-        self.ren_body_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        self.ren_body_frame.pack(fill="x", padx=0, pady=0)
-
-        # === 1. 正则匹配重命名 面板 ===
-        self.regex_container = ctk.CTkFrame(self.ren_body_frame, fg_color="transparent")
-        
-        card_reg1 = self._card(self.regex_container)
-        card_reg1.pack(fill="x", padx=4, pady=(2, 4))
-        ctk.CTkLabel(card_reg1, text="目标文件夹 [正则匹配]", font=("Segoe UI", 12, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(6, 0))
-        folder_row = ctk.CTkFrame(card_reg1, fg_color="transparent")
-        folder_row.pack(fill="x", padx=8, pady=(4, 6))
-        self.rename_folder_entry = ctk.CTkEntry(
-            folder_row, placeholder_text="选择包含视频或字幕的文件夹",
-            corner_radius=6, border_color=C_BORDER
-        )
-        self.rename_folder_entry.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(
-            folder_row, text="📁", width=36, height=28, corner_radius=6,
-            fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
-            command=self._browse_rename_folder
-        ).pack(side="left", padx=(6, 0))
-
-        card_reg2 = self._card(self.regex_container)
-        card_reg2.pack(fill="x", padx=4, pady=(2, 4))
-        ctk.CTkLabel(card_reg2, text="命名模板 [正则匹配]", font=("Segoe UI", 12, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(6, 0))
-        self.fmt_entry = ctk.CTkEntry(
-            card_reg2, placeholder_text="例：短剧名称_第1集",
-            corner_radius=6, border_color=C_BORDER
-        )
-        self.fmt_entry.insert(0, "短剧名称_第1集")
-        self.fmt_entry.pack(fill="x", padx=8, pady=(4, 2))
-        ctk.CTkLabel(
-            card_reg2, text="提示：模板中的数字会被自动替换为文件名提取出的集数",
-            font=("Segoe UI", 10), text_color=C_MUTED, anchor="w"
-        ).pack(fill="x", padx=8, pady=(0, 6))
-
-        self.regex_preview_btn = ctk.CTkButton(
-            self.regex_container, text="⚡  规则预览重命名 [正则匹配]", height=32, corner_radius=8,
-            fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
-            font=("Segoe UI", 11, "bold"), command=self._regex_preview_thread
-        )
-        self.regex_preview_btn.pack(fill="x", padx=4, pady=(2, 2))
-
-        # === 2. AI 智能重命名 面板 ===
-        self.ai_container = ctk.CTkFrame(self.ren_body_frame, fg_color="transparent")
-
-        card_ai1 = self._card(self.ai_container)
-        card_ai1.pack(fill="x", padx=4, pady=(2, 4))
-        ctk.CTkLabel(card_ai1, text="选择文件 / 文件夹 [AI 智能]", font=("Segoe UI", 12, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(6, 0))
-        ai_row = ctk.CTkFrame(card_ai1, fg_color="transparent")
-        ai_row.pack(fill="x", padx=8, pady=(4, 6))
-        ctk.CTkButton(ai_row, text="📁 选择文件", width=85, height=28, corner_radius=6,
-                      fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
-                      command=self._sel_vids).pack(side="left")
-        ctk.CTkButton(ai_row, text="📂 载入文件夹", width=85, height=28, corner_radius=6,
-                      fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
-                      command=self._load_folder_for_ai).pack(side="left", padx=(6, 0))
-        self.file_lbl = ctk.CTkLabel(ai_row, text="未选择", font=("Segoe UI", 11), text_color=C_MUTED)
-        self.file_lbl.pack(side="left", padx=8)
-
-        card_ai2 = self._card(self.ai_container)
-        card_ai2.pack(fill="x", padx=4, pady=(2, 4))
-        ctk.CTkLabel(card_ai2, text="命名格式 [AI 智能]", font=("Segoe UI", 12, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(6, 0))
-        self.ai_fmt_entry = ctk.CTkEntry(
-            card_ai2, placeholder_text="例: 短剧名_第X集",
-            corner_radius=6, border_color=C_BORDER
-        )
-        self.ai_fmt_entry.insert(0, "短剧名称_第X集")
-        self.ai_fmt_entry.pack(fill="x", padx=8, pady=(4, 2))
-        ctk.CTkLabel(
-            card_ai2, text="提示：由 Google Gemini 大模型智能识别文件名并按格式推理重命名",
-            font=("Segoe UI", 10), text_color=C_MUTED, anchor="w"
-        ).pack(fill="x", padx=8, pady=(0, 6))
-
-        self.ai_preview_btn = ctk.CTkButton(
-            self.ai_container, text="✨  AI 预览重命名 [AI 智能]", height=32, corner_radius=8,
-            fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
-            font=("Segoe UI", 11, "bold"), command=self._ai_preview_thread
-        )
-        self.ai_preview_btn.pack(fill="x", padx=4, pady=(2, 2))
-
-        self.ren_progress = ctk.CTkProgressBar(self.ai_container, mode="indeterminate", height=4, fg_color=C_BG)
-        self.ren_progress.set(0)
-
-        # 默认展示正则匹配面板
-        self.regex_container.pack(fill="x", expand=True)
-
-        # === 3. 共享预览表格 (清晰标出重命名方式) ===
-        style = ttk.Style()
-        style.configure("R.Treeview", background=C_CARD, foreground=C_TEXT,
-                         fieldbackground=C_CARD, borderwidth=0, font=("Segoe UI", 10),
-                         rowheight=24)
-        style.configure("R.Treeview.Heading", background=C_BG, foreground=C_MUTED,
-                         font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat")
-        
-        cols = ("old", "new", "mode")
-        self.ren_tree = ttk.Treeview(tab, columns=cols, show="headings", height=5,
-                                      style="R.Treeview")
-        self.ren_tree.heading("old", text="原文件名")
-        self.ren_tree.heading("new", text="新文件名")
-        self.ren_tree.heading("mode", text="重命名方式")
-        self.ren_tree.column("old", width=175)
-        self.ren_tree.column("new", width=175)
-        self.ren_tree.column("mode", width=80, anchor="center")
-        self.ren_tree.pack(fill="both", expand=True, padx=4, pady=2)
-        
-        self.ren_btn = ctk.CTkButton(tab, text="✅  执行重命名", height=34, corner_radius=8,
-                                      fg_color=C_SUCCESS, hover_color="#16a34a",
-                                      font=("Segoe UI", 12, "bold"), state="disabled",
-                                      command=self._exec_rename)
-        self.ren_btn.pack(fill="x", padx=4, pady=(3, 6))
-
-        # 注册拖放支持
-        try:
-            import windnd
-            def _on_drop(files):
-                paths = [f.decode('gbk') if isinstance(f, bytes) else f for f in files]
-                if len(paths) == 1 and os.path.isdir(paths[0]):
-                    folder = paths[0]
-                    self.rename_folder_entry.delete(0, "end")
-                    self.rename_folder_entry.insert(0, folder)
-                    if self.ren_mode_seg.get() == "AI 智能重命名":
-                        self._load_folder_for_ai(folder)
-                    return
-                valid = [p for p in paths if p.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.srt', '.ass', '.wav', '.mp3'))]
-                if valid:
-                    self.sel_files = list(set(self.sel_files + valid))
-                    self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
-                    self.ren_mode_seg.set("AI 智能重命名")
-                    self._on_ren_mode_change("AI 智能重命名")
-                    self.ren_btn.configure(state="disabled")
-                    for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
-            windnd.hook_dropfiles(self.winfo_id(), func=_on_drop)
-        except Exception:
-            pass
-
-    def _on_ren_mode_change(self, mode):
-        """切换重命名模式视图"""
-        for item in self.ren_tree.get_children():
-            self.ren_tree.delete(item)
-        self.rename_plan = []
-        self.ren_btn.configure(state="disabled")
-        if mode == "正则匹配重命名":
-            self.ai_container.pack_forget()
-            self.regex_container.pack(fill="x", expand=True)
-        else:
-            self.regex_container.pack_forget()
-            self.ai_container.pack(fill="x", expand=True)
-
-    def _browse_rename_folder(self):
-        folder = filedialog.askdirectory(title="选择要批量重命名的文件夹")
-        if folder:
-            self.rename_folder_entry.delete(0, "end")
-            self.rename_folder_entry.insert(0, folder)
-            self.rename_plan = []
-            for item in self.ren_tree.get_children():
-                self.ren_tree.delete(item)
-            self.ren_btn.configure(state="disabled")
-
-    def _sel_vids(self):
-        f = filedialog.askopenfilenames(
-            title="选择视频或字幕文件（可多选）",
-            filetypes=[("视频/字幕", "*.mp4 *.mov *.avi *.mkv *.srt *.ass *.wav *.mp3"), ("全部", "*.*")]
-        )
-        if f:
-            self.sel_files = list(f)
-            self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
-            self.ren_btn.configure(state="disabled")
-            for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
-
-    def _load_folder_for_ai(self, folder=None):
-        if not folder:
-            folder = self.rename_folder_entry.get().strip().strip('"')
-        if not folder or not os.path.isdir(folder):
-            folder = filedialog.askdirectory(title="选择包含视频或字幕的文件夹")
-        if folder and os.path.isdir(folder):
-            self.rename_folder_entry.delete(0, "end")
-            self.rename_folder_entry.insert(0, folder)
-            valid_exts = ('.mp4', '.mov', '.avi', '.mkv', '.srt', '.ass', '.wav', '.mp3')
-            files = [
-                os.path.join(folder, f) for f in sorted(os.listdir(folder))
-                if os.path.isfile(os.path.join(folder, f)) and f.lower().endswith(valid_exts)
-            ]
-            if files:
-                self.sel_files = files
-                self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
-                for item in self.ren_tree.get_children():
-                    self.ren_tree.delete(item)
-                self.ren_btn.configure(state="disabled")
-                self._log(f"已从文件夹载入 {len(files)} 个文件用于 AI 重命名")
-            else:
-                self._show_toast("未找到有效文件", "该文件夹下没有常见的视频或字幕文件", C_WARN)
-
-    # ────────── 设置页 ──────────
-    def _build_settings_tab(self):
-        tab = self.tabs.tab("设置")
-        
-        card = self._card(tab)
-        card.pack(fill="x", padx=4, pady=(4, 8))
-        
-        ctk.CTkLabel(card, text="Gemini API Key", font=("Segoe UI", 13, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(8,0))
-        row1 = ctk.CTkFrame(card, fg_color="transparent")
-        row1.pack(fill="x", padx=8, pady=(4, 8))
-        ctk.CTkLabel(row1, text="默认为作者公用Key，有速率限制\n强烈建议使用自己的Key以保证稳定：",
-                     font=("Segoe UI", 11), text_color=C_WARN, anchor="w",
-                     justify="left").pack(side="left")
-        import webbrowser
-        ctk.CTkButton(row1, text="获取 API Key", width=80, height=26, corner_radius=6,
-                      fg_color="#3b82f6", font=("Segoe UI", 11, "bold"), text_color="white",
-                      command=lambda: webbrowser.open("https://aistudio.google.com/api-keys")
-                      ).pack(side="right")
-        
-        self.key_entry = ctk.CTkEntry(card, show="•", corner_radius=6,
-                                       border_color=C_BORDER, height=32)
-        self.key_entry.insert(0, self.api_key)
-        self.key_entry.pack(fill="x", padx=8, pady=(0, 8))
-        
-        row_model = ctk.CTkFrame(card, fg_color="transparent")
-        row_model.pack(fill="x", padx=8, pady=(4, 12))
-        ctk.CTkLabel(row_model, text="使用的模型:", font=("Segoe UI", 12, "bold"), text_color=C_TEXT).pack(side="left")
-        
-        models = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3-flash", "gemini-3.7-flash", "gemini-3.8-flash"]
-        self.model_combo = ctk.CTkComboBox(row_model, values=models, width=180, corner_radius=6, border_color=C_BORDER, button_color=C_BORDER)
-        self.model_combo.set(self.api_model if self.api_model in models else "gemini-3.5-flash")
-        self.model_combo.pack(side="right")
-        
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=8, pady=(0,8))
-        
-        ctk.CTkLabel(row, text="作者 - 塔奇 修改 - 小马", font=("Segoe UI", 11), text_color=C_MUTED).pack(side="left")
-        
-        ctk.CTkButton(row, text="保存设置", height=32, corner_radius=6,
-                      fg_color=C_PRIMARY, font=("Segoe UI", 11),
-                      command=lambda: (self._save_cfg(), self._show_toast("✓", "设置已保存", C_SUCCESS))
-                      ).pack(side="right")
-
-    # ═══════════════════════ 辅助组件 ═══════════════════════
-    def _card(self, parent):
-        return ctk.CTkFrame(parent, fg_color=C_CARD, corner_radius=8,
-                            border_width=1, border_color=C_BORDER)
-
-    class _LogWriter:
-        def __init__(self, *widgets):
-            self.ws = widgets
-        def write(self, s):
-            for w in self.ws:
-                if w:
-                    w.configure(state="normal")
-                    w.insert("end", s)
-                    w.see("end")
-                    w.configure(state="disabled")
-        def flush(self): pass
-
-    def _log(self, msg):
-        print(msg)
-
-# ═══════════════════════ 坐标向导 ═══════════════════════
+    # ═══════════════════════ 坐标向导 ═══════════════════════
     def _start_wizard(self):
         self.rec_state = "export"
-        self.guide_lbl.configure(text="[1/5] 鼠标放在【导出】上 → 按 F8", text_color=C_PRIMARY)
+        self.guide_lbl.configure(text="[1/5] 鼠标放在【导出】上 → 按 F8")
         self._log("向导开始，请按 F8 录制各按钮位置")
     
     def _capture_btn_template(self, x, y, name):
@@ -1033,9 +879,7 @@ del /f /q "%~f0" >nul 2>&1
         }
         nxt, txt = flow[self.rec_state]
         self.rec_state = nxt
-        
-        color = C_SUCCESS if nxt is None else C_PRIMARY
-        self.after(0, lambda: self.guide_lbl.configure(text=txt, text_color=color))
+        self.guide_lbl.configure(text=txt)
         
         if nxt is None:
             self._save_cfg()
@@ -1093,7 +937,6 @@ del /f /q "%~f0" >nul 2>&1
             if not raw:
                 self._log("⚠  未识别到草稿"); self.status.configure(text="未识别"); return
             
-            # 排序
             raw.sort(key=lambda c: c[1])
             rows, cur = [], []
             for c in raw:
@@ -1107,7 +950,7 @@ del /f /q "%~f0" >nul 2>&1
             self.drafts = []
             for row in rows: self.drafts.extend(row)
             
-            self.after(0, self._fill_queue)
+            self._fill_queue()
             preview = ", ".join(d[2] for d in self.drafts[:3])
             if len(self.drafts) > 3: preview += "..."
             self._log(f"识别到 {len(self.drafts)} 个: {preview}")
@@ -1115,13 +958,11 @@ del /f /q "%~f0" >nul 2>&1
         except Exception as e:
             msg = self._get_api_err_msg(e)
             self._log(f"✗ {msg}"); self.status.configure(text="扫描失败")
-            self.after(0, lambda m=msg: self._show_toast("AI 扫描失败", m, C_DANGER, 6000))
+            self._show_toast("AI 扫描失败", m if 'm' in locals() else msg, C_DANGER, 6000)
 
     def _fill_queue(self):
-        for i in self.queue.get_children(): self.queue.delete(i)
-        for i, (x, y, nm) in enumerate(self.drafts):
-            self.queue.insert("", "end", iid=str(i), values=(i+1, nm, "待处理"))
-        if self.drafts: self.queue.selection_set("0")
+        items = [{"name": nm, "st": "待处理"} for _, _, nm in self.drafts]
+        self._js("renderQueue", items)
 
     # ═══════════════════════ 导出核心 ═══════════════════════
     def _stop(self):
@@ -1134,24 +975,20 @@ del /f /q "%~f0" >nul 2>&1
         rh = self.coords.get('popup_close')       # 收起至首页坐标
         cb = self.coords.get('close_btn')         # 关闭弹窗坐标
         
-        # 只等 0.5s，防止快速导出的草稿错过按钮
         self._log("  · 等待导出弹窗 (0.5s)...")
         time.sleep(0.5)
         if self.stop_flag: return None
         
-        # 加载模板图片
         base = os.path.dirname(os.path.abspath(CFG_FILE)) or "."
         meipass = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-        tpl_rh = os.path.join(base, "tpl_return_home.png")        # 录制时截取
-        tpl_rh_bundled = os.path.join(meipass, "btn_bright.png")  # 内置
-        tpl_close = os.path.join(base, "tpl_close_popup.png")     # 录制时截取
+        tpl_rh = os.path.join(base, "tpl_return_home.png")
+        tpl_rh_bundled = os.path.join(meipass, "btn_bright.png")
+        tpl_close = os.path.join(base, "tpl_close_popup.png")
         
         self._log("  · 等待按钮就绪 (支持自动降级识别)...")
         while not self.stop_flag:
-            # ── 1. 优先检测【收起至首页】 ──
             if rh:
                 x_rh, y_rh = rh
-                # 1.1 OpenCV 模板匹配 (优先在坐标附近区域查找，再全屏查找)
                 for tpl_path in [tpl_rh, tpl_rh_bundled]:
                     if not os.path.exists(tpl_path): continue
                     try:
@@ -1168,7 +1005,6 @@ del /f /q "%~f0" >nul 2>&1
                             return "return_home"
                     except Exception: pass
                 
-                # 1.2 像素特征采样：亮青色背景 (R<80 且 G>130 且 B>130)
                 for ox in [-25, -15, -5, 0, 5, 15, 25]:
                     for oy in [-10, -5, 0, 5, 10]:
                         try:
@@ -1178,10 +1014,7 @@ del /f /q "%~f0" >nul 2>&1
                                 return "return_home"
                         except Exception: pass
             
-            # ── 2. 检测【关闭】按钮 (快速导出/已完成时自动降级，或常规关闭模式) ──
             close_pos = cb or (rh if not self.coords.get('close_btn') else None)
-            
-            # 2.1 模板匹配
             if os.path.exists(tpl_close):
                 try:
                     if close_pos:
@@ -1198,7 +1031,6 @@ del /f /q "%~f0" >nul 2>&1
                         return "close"
                 except Exception: pass
             
-            # 2.2 像素结构/对比度保底识别：检测 close_pos 区域是否有按钮文字/高对比度结构
             if close_pos:
                 cx, cy = close_pos
                 samples = []
@@ -1211,26 +1043,22 @@ del /f /q "%~f0" >nul 2>&1
                     max_b = max(max(r, g, b) for r, g, b in samples)
                     min_b = min(min(r, g, b) for r, g, b in samples)
                     contrast = max_b - min_b
-                    # 导出未完成时底色平坦暗灰 (max_b<60, contrast<20)
-                    # 导出完成显示按钮时有文字或边框 (max_b>160, contrast>60)，绝不提前误触
                     if max_b > 160 and contrast > 60:
-                        self._log(f"  ✓ 检测到【关闭】按钮 (结构对比度)")
+                        self._log("  ✓ 检测到【关闭】按钮 (结构对比度)")
                         return "close"
                     
             time.sleep(1)
         return None
 
-    def _start_export(self):
+    def _start_export(self, idx=0):
         req = [self.coords.get("export"), self.coords.get("confirm")]
         if None in req or (not self.coords.get("popup_close") and not self.coords.get("close_btn")):
             self._show_toast("未就绪", "请先完成坐标录制 (至少包含导出、确认与关闭/收起)", C_WARN); return
         if not self.drafts:
             self._show_toast("未就绪", "请先 AI 扫描首页", C_WARN); return
-        sel = self.queue.selection()
-        if not sel:
-            self._show_toast("提示", "请在队列中选中一行作为起始点", C_WARN); return
+        if idx is None or idx < 0 or idx >= len(self.drafts):
+            idx = 0
         
-        idx = int(sel[0])
         nm = self.drafts[idx][2]
         n = len(self.drafts) - idx
         
@@ -1245,7 +1073,7 @@ del /f /q "%~f0" >nul 2>&1
         if self.stop_flag: raise Exception("用户中断")
 
     def _qst(self, i, st):
-        self.after(0, lambda: self.queue.set(str(i), "st", st))
+        self._js("updateQueueItemStatus", i, st)
 
     def _export_loop(self, start):
         try:
@@ -1272,17 +1100,14 @@ del /f /q "%~f0" >nul 2>&1
                 time.sleep(1)
                 pyautogui.press('enter')
                 
-                # 等待导出完成，智能检测哪个按钮出现
                 result = self._wait_done()
                 self._chk()
                 
                 if result == "return_home":
-                    # 收起至首页按钮出现 → 点击它，直接回到首页
                     pyautogui.click(*self.coords['popup_close'])
                     self._log("  · 已收起至首页 (后台导出)")
                     time.sleep(1)
                 elif result == "close":
-                    # 关闭弹窗按钮出现（快速导出降级或常规模式）→ 点关闭，再点关闭草稿
                     cb = self.coords.get('close_btn') or self.coords.get('popup_close')
                     if cb:
                         pyautogui.click(*cb)
@@ -1293,11 +1118,10 @@ del /f /q "%~f0" >nul 2>&1
                         self._chk(); pyautogui.click(*dc)
                         self._log("  · 关闭草稿 → 返回首页")
                 else:
-                    # 异常或终止，尝试点击
                     cb = self.coords.get('popup_close') or self.coords.get('close_btn')
                     if cb: pyautogui.click(*cb)
                 
-                self._qst(i, "✅")
+                self._qst(i, "✅ 完成")
                 self._log("  · 休息 1s")
                 for _ in range(2): self._chk(); time.sleep(0.5)
             
@@ -1306,38 +1130,23 @@ del /f /q "%~f0" >nul 2>&1
         except Exception as e:
             err = str(e)
             if "用户中断" not in err:
-                self.after(0, lambda: self._show_toast("导出异常终止", f"发生错误: {err[:50]}", C_DANGER, 6000))
+                self._show_toast("导出异常终止", f"发生错误: {err[:50]}", C_DANGER, 6000)
             self._log(f"\n⏸ {err}")
         finally:
-            self.after(0, lambda: self.start_btn.configure(state="normal"))
+            self.start_btn.configure(state="normal")
 
-    # ═══════════════════════ 字幕提取 ═══════════════════════
-    def _check_first_sub(self, next_func):
-        if self.first_sub:
-            self.first_sub = False
-            self._save_cfg()
-            msg = "【首次使用字幕功能须知】\n\n草稿必须是从云空间下载的，并且绝对不允许在剪映里双击打开过！\n\n如果打开过，请将其删除并重新从云空间下载后再操作！"
-            self._ask_yes_no("⚠️ 警告", msg, next_func, show_cancel=False)
-        else:
-            next_func()
-
+    # ═══════════════════════ 字幕提取 (已移除首次云空间下载提示) ═══════════════════════
     def _sub_thread(self):
-        def _run():
-            self._ask_yes_no("安全确认", "确定执行？此操作将提取 SRT 并隐藏字幕轨道", lambda: threading.Thread(target=self._extract_subs, daemon=True).start())
-        self._check_first_sub(_run)
+        self._ask_yes_no("安全确认", "确定执行？此操作将提取 SRT 并隐藏字幕轨道", lambda: threading.Thread(target=self._extract_subs, daemon=True).start())
 
     def _fix_font_thread(self):
-        def _run():
-            self._ask_yes_no("安全确认", "确定执行？此操作将统一字体并解除隐藏", lambda: threading.Thread(target=self._fix_fonts, daemon=True).start())
-        self._check_first_sub(_run)
+        self._ask_yes_no("安全确认", "确定执行？此操作将统一字体并解除隐藏", lambda: threading.Thread(target=self._fix_fonts, daemon=True).start())
 
     def _find_noto_sans_bold(self):
-        import re
         dirs_to_check = [
             os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Windows', 'Fonts'),
             os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts')
         ]
-        
         for d in dirs_to_check:
             if not os.path.exists(d): continue
             for fn in os.listdir(d):
@@ -1348,14 +1157,12 @@ del /f /q "%~f0" >nul 2>&1
         return None
 
     def _unhide_tracks_thread(self):
-        def _run():
-            self._ask_yes_no("安全确认", "确定执行？此操作将解除所有草稿的字幕隐藏", lambda: threading.Thread(target=self._unhide_tracks, daemon=True).start())
-        self._check_first_sub(_run)
+        self._ask_yes_no("安全确认", "确定执行？此操作将解除所有草稿的字幕隐藏", lambda: threading.Thread(target=self._unhide_tracks, daemon=True).start())
 
     def _unhide_tracks(self):
         if self._jianying_is_running():
             self._log("✗ 请先完全退出剪映，再执行解除隐藏")
-            self.after(0, lambda: self._show_toast("剪映仍在运行", "请完全退出剪映后重试", C_WARN, 6000))
+            self._show_toast("剪映仍在运行", "请完全退出剪映后重试", C_WARN, 6000)
             return
         base = self.draft_dir.get()
         if not os.path.exists(base): self._log("✗ 草稿根目录不存在"); return
@@ -1383,19 +1190,16 @@ del /f /q "%~f0" >nul 2>&1
             except Exception as e:
                 self._log(f"  ✗ {fn} 失败: {e}")
         self._log(f"完成，共解除隐藏 {ok} 个草稿")
-        self.after(0, lambda: self._show_toast("处理完成", f"成功解除 {ok} 个草稿的隐藏状态", C_SUCCESS, 6000))
+        self._show_toast("处理完成", f"成功解除 {ok} 个草稿的隐藏状态", C_SUCCESS, 6000)
 
     def _fix_fonts(self):
         font_path = self._find_noto_sans_bold()
         if not font_path:
             self._log("✗ 未在系统中找到 Noto Sans Bold 字体文件，请先安装该字体！")
-            self.after(0, lambda: self._show_toast("缺少字体", "未检测到 Noto Sans Bold，无法统一字体", C_DANGER, 6000))
+            self._show_toast("缺少字体", "未检测到 Noto Sans Bold，无法统一字体", C_DANGER, 6000)
             return
             
-        tpl_font = {
-            "path": font_path,
-            "id": ""
-        }
+        tpl_font = {"path": font_path, "id": ""}
         self._log(f"将强制所有草稿使用系统匹配字体:\n  {font_path}")
         base = self.draft_dir.get()
         if not os.path.exists(base): self._log("✗ 草稿根目录不存在"); return
@@ -1432,10 +1236,9 @@ del /f /q "%~f0" >nul 2>&1
                 self._log(f"  ✗ {fn} 失败: {e}")
                 
         self._log(f"完成，共处理 {ok} 个草稿")
-        self.after(0, lambda: self._show_toast("处理完成", f"成功统一 {ok} 个草稿字体\n使用: {font_path}", C_SUCCESS, 6000))
+        self._show_toast("处理完成", f"成功统一 {ok} 个草稿字体\n使用: {font_path}", C_SUCCESS, 6000)
 
     def _load_plain_draft_json(self, path):
-        """读取未加密的草稿 JSON；新版编码文件返回 None。"""
         try:
             with open(path, 'r', encoding='utf-8-sig') as f:
                 data = json.load(f)
@@ -1464,7 +1267,6 @@ del /f /q "%~f0" >nul 2>&1
         return draft_io
 
     def _find_subtitle_jsons(self, draft_dir):
-        """读取根草稿和多时间线，支持明文及新版剪映加密格式。"""
         candidates = [os.path.join(draft_dir, 'draft_content.json')]
         timelines_dir = os.path.join(draft_dir, 'Timelines')
         if os.path.isdir(timelines_dir):
@@ -1533,7 +1335,6 @@ del /f /q "%~f0" >nul 2>&1
         return lines
 
     def _set_text_tracks_hidden(self, data, hidden=True):
-        """切换文字轨道可见状态，保留轨道、片段和字幕素材。"""
         text_tracks = [t for t in data.get('tracks', []) if t.get('type') == 'text']
         for track in text_tracks:
             for segment in track.get('segments', []):
@@ -1541,7 +1342,6 @@ del /f /q "%~f0" >nul 2>&1
         return len(text_tracks)
 
     def _save_subtitle_jsons(self, subtitle_jsons):
-        """先备份全部目标，再原子写入；任一写入失败则恢复所有文件。"""
         stamp = time.strftime('%Y%m%d_%H%M%S') + f"_{int(time.time() * 1000) % 1000:03d}"
         backups = []
         try:
@@ -1576,7 +1376,7 @@ del /f /q "%~f0" >nul 2>&1
         self._log("提取字幕...")
         if self._jianying_is_running():
             self._log("✗ 请先完全退出剪映，再提取并隐藏字幕")
-            self.after(0, lambda: self._show_toast("剪映仍在运行", "请完全退出剪映后重试", C_WARN, 6000))
+            self._show_toast("剪映仍在运行", "请完全退出剪映后重试", C_WARN, 6000)
             return
         base = self.draft_dir.get()
         if not os.path.exists(base):
@@ -1601,7 +1401,6 @@ del /f /q "%~f0" >nul 2>&1
                 if encoded_drafts:
                     self._log(f"  · {name} 已通过剪映接口解密 {len(encoded_drafts)} 份 draft_content.json")
 
-                # 根目录与 Timelines 中可能有镜像，只从第一份提取一次 SRT。
                 lines = self._subtitle_lines(subtitle_jsons[0][1])
                 if not lines:
                     raise ValueError("检测到文字轨道，但没有可提取的字幕文本")
@@ -1628,22 +1427,11 @@ del /f /q "%~f0" >nul 2>&1
                 failed += 1
         self._log(f"完成，成功提取并隐藏 {ok} 个，失败 {failed} 个")
         if failed:
-            self.after(0, lambda: self._show_toast(
-                "部分处理失败", f"成功 {ok} 个，失败 {failed} 个\n请查看日志，失败草稿已自动回滚", C_WARN, 8000
-            ))
+            self._show_toast("部分处理失败", f"成功 {ok} 个，失败 {failed} 个\n请查看日志，失败草稿已自动回滚", C_WARN, 8000)
         else:
-            self.after(0, lambda: self._show_toast(
-                "提取完成", f"共处理 {ok} 个草稿\n字幕已保存至桌面/srt，原轨道已隐藏", C_SUCCESS, 6000
-            ))
+            self._show_toast("提取完成", f"共处理 {ok} 个草稿\n字幕已保存至桌面/srt，原轨道已隐藏", C_SUCCESS, 6000)
 
     # ═══════════════════════ 重命名 ═══════════════════════
-    def _ren_preview_thread(self):
-        mode = self.ren_mode_seg.get() if hasattr(self, "ren_mode_seg") else "正则匹配重命名"
-        if mode == "AI 智能重命名":
-            self._ai_preview_thread()
-        else:
-            self._regex_preview_thread()
-
     def _regex_preview_thread(self):
         folder = self.rename_folder_entry.get().strip().strip('"')
         template = self.fmt_entry.get().strip()
@@ -1660,11 +1448,7 @@ del /f /q "%~f0" >nul 2>&1
 
         prefix, suffix = parsed
         self.rename_folder = folder
-        plan, skipped_duplicates, skipped_without_number = _rename_plan(
-            folder, prefix, suffix
-        )
-        for item in self.ren_tree.get_children():
-            self.ren_tree.delete(item)
+        plan, skipped_duplicates, skipped_without_number = _rename_plan(folder, prefix, suffix)
 
         self.rename_plan = []
         for old_name, new_name in plan:
@@ -1677,7 +1461,8 @@ del /f /q "%~f0" >nul 2>&1
                 "new_name": new_name,
                 "mode": "正则匹配"
             })
-            self.ren_tree.insert("", "end", values=(old_name, new_name, "正则匹配"))
+
+        self._js("renderRenamePlan", self.rename_plan)
 
         if skipped_duplicates:
             self._log("【正则匹配】检测到重复集数，以下文件跳过：")
@@ -1688,24 +1473,20 @@ del /f /q "%~f0" >nul 2>&1
             for filename in skipped_without_number:
                 self._log(f"  {filename}")
         if not self.rename_plan:
-            self.ren_btn.configure(state="disabled")
             self._show_toast("没有可改名文件", "【正则匹配】没有生成有效的重命名计划", C_WARN)
             return
 
-        self.ren_btn.configure(state="normal")
         self._log(f"✓ 【正则匹配重命名】预览完成，共 {len(self.rename_plan)} 个文件")
 
     def _ai_preview_thread(self):
         if not getattr(self, "sel_files", None):
             folder = self.rename_folder_entry.get().strip().strip('"')
             if folder and os.path.isdir(folder):
-                self._load_folder_for_ai(folder)
+                self.load_folder_for_ai(folder)
             if not getattr(self, "sel_files", None):
                 self._show_toast("提示", "请先选择视频/字幕文件或载入文件夹", C_WARN)
                 return
-        self.ai_preview_btn.configure(state="disabled", text="⏳ AI 正在思考中...")
-        self.ren_progress.pack(fill="x", padx=12, pady=(0, 4))
-        self.ren_progress.start()
+        self.ai_preview_btn.configure(state="disabled")
         threading.Thread(target=self._ai_preview, daemon=True).start()
 
     def _ai_preview(self):
@@ -1725,22 +1506,15 @@ del /f /q "%~f0" >nul 2>&1
                 if t.startswith(pfx): t = t[len(pfx):]
             if t.endswith("```"): t = t[:-3]
             data = json.loads(t.strip())
-            self.after(0, self._fill_ai_ren, data)
-        except Exception as e: 
+            self._fill_ai_ren(data)
+        except Exception as e:
             msg = self._get_api_err_msg(e)
             self._log(f"✗ 【AI 重命名失败】{msg}")
-            self.after(0, lambda m=msg: self._show_toast("AI 重命名失败", m, C_DANGER, 6000))
-            self.after(0, self._reset_ai_ren_ui)
-
-    def _reset_ai_ren_ui(self):
-        self.ai_preview_btn.configure(state="normal", text="✨  AI 预览重命名 [AI 智能]")
-        self.ren_progress.stop()
-        self.ren_progress.pack_forget()
+            self._show_toast("AI 重命名失败", msg, C_DANGER, 6000)
+            self.ai_preview_btn.configure(state="normal")
 
     def _fill_ai_ren(self, data):
-        self._reset_ai_ren_ui()
-        for i in self.ren_tree.get_children():
-            self.ren_tree.delete(i)
+        self.ai_preview_btn.configure(state="normal")
         dm = {os.path.basename(f): os.path.dirname(f) for f in self.sel_files}
         self.rename_plan = []
         for it in data:
@@ -1756,24 +1530,20 @@ del /f /q "%~f0" >nul 2>&1
                     "new_name": n,
                     "mode": "AI重命名"
                 })
-                self.ren_tree.insert("", "end", values=(o, n, "AI重命名"))
+        self._js("renderRenamePlan", self.rename_plan)
         if self.rename_plan:
-            self.ren_btn.configure(state="normal")
             self._log(f"✓ 【AI 智能重命名】预览已生成，共 {len(self.rename_plan)} 个文件")
         else:
-            self.ren_btn.configure(state="disabled")
             self._show_toast("AI 未返回匹配文件", "未能成功生成匹配规则，请检查格式或文件列表", C_WARN)
 
-    def _exec_rename(self):
+    def _do_exec_rename(self):
         if not self.rename_plan:
-            return
-        if not self._ask_rename_confirmation():
             return
         ok = 0
         skipped = 0
         errors = 0
         total = len(self.rename_plan)
-        current_mode = self.ren_mode_seg.get() if hasattr(self, "ren_mode_seg") else "重命名"
+        current_mode = self.ren_mode_val
 
         for item in self.rename_plan:
             source = item["source"]
@@ -1800,36 +1570,66 @@ del /f /q "%~f0" >nul 2>&1
         )
         self.rename_plan = []
         self.sel_files = []
-        if hasattr(self, "file_lbl"):
-            self.file_lbl.configure(text="未选择")
-        for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
-        self.ren_btn.configure(state="disabled")
+        self.file_lbl.configure(text="未选择")
+        self._js("renderRenamePlan", [])
 
-    def _ask_rename_confirmation(self):
-        """执行前复用应用确认框，避免预览后误改文件。"""
-        result = {"confirmed": False}
-        current_mode = self.ren_mode_seg.get() if hasattr(self, "ren_mode_seg") else "重命名"
-        dialog = ctk.CTkFrame(self, fg_color=C_CARD, corner_radius=12, border_width=2, border_color=C_BORDER)
-        dialog.place(relx=0.5, rely=0.5, anchor="center")
-        ctk.CTkLabel(dialog, text=f"确认【{current_mode}】", font=("Segoe UI", 14, "bold"), text_color=C_TEXT).pack(pady=(20, 10))
-        ctk.CTkLabel(
-            dialog,
-            text=f"将使用【{current_mode}】修改 {len(self.rename_plan)} 个文件，是否继续？",
-            font=("Segoe UI", 12), text_color=C_TEXT,
-        ).pack(pady=(0, 20), padx=24)
-        buttons = ctk.CTkFrame(dialog, fg_color="transparent")
-        buttons.pack(fill="x", padx=20, pady=(0, 20))
+    def _snap_to_bottom_right(self):
+        try:
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+            title = "JIANYING AI PRO"
+            hwnd = user32.FindWindowW(None, title)
+            if not hwnd:
+                return
+            wa = wintypes.RECT()
+            user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(wa), 0)  # SPI_GETWORKAREA
+            wr = wintypes.RECT()
+            user32.GetWindowRect(hwnd, ctypes.byref(wr))
+            actual_w = wr.right - wr.left
+            actual_h = wr.bottom - wr.top
+            margin = 14
+            nx = max(wa.left + margin, wa.right - actual_w - margin)
+            ny = max(wa.top + margin, wa.bottom - actual_h - margin)
+            user32.SetWindowPos(hwnd, -1, nx, ny, 0, 0, 0x0001)  # HWND_TOPMOST=-1, SWP_NOSIZE=0x0001
+        except Exception:
+            pass
 
-        def close(confirmed):
-            result["confirmed"] = confirmed
-            dialog.destroy()
+    def run(self):
+        # 标准大小 (780x540)，自动贴合屏幕右下角工作区
+        win_w, win_h = 520, 480
+        try:
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+            wa = wintypes.RECT()
+            user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(wa), 0)
+            dpi = user32.GetDpiForSystem()
+            scale = dpi / 96.0 if dpi else 1.5
+            phys_w = int(win_w * scale)
+            phys_h = int(win_h * scale)
+            pos_x = max(10, int((wa.right - phys_w - 14) / scale))
+            pos_y = max(10, int((wa.bottom - phys_h - 14) / scale))
+        except Exception:
+            pos_x, pos_y = 600, 300
 
-        ctk.CTkButton(buttons, text="取消", width=80, command=lambda: close(False)).pack(side="left", padx=4)
-        ctk.CTkButton(buttons, text="确认", width=80, fg_color=C_PRIMARY, command=lambda: close(True)).pack(side="right", padx=4)
-        self.wait_window(dialog)
-        return result["confirmed"]
+        self._api = _JsBridgeApi(self)
+        self.window = webview.create_window(
+            "JIANYING AI PRO",
+            html=BANKNOTE_HTML,
+            js_api=self._api,
+            width=win_w,
+            height=win_h,
+            x=pos_x,
+            y=pos_y,
+            resizable=False,
+            frameless=True,
+            easy_drag=False,
+            on_top=True,
+            background_color="#FBF9F5",
+        )
+        webview.start(lambda: self.after(150, self._snap_to_bottom_right), debug=False)
+
 
 # ─── 启动 ──────────────────────────────────────────────────
 if __name__ == "__main__":
     app = App()
-    app.mainloop()
+    app.run()
