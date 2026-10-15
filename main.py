@@ -6,7 +6,9 @@ Built with CustomTkinter for a modern native look.
 import customtkinter as ctk
 from tkinter import ttk, filedialog
 import tkinter as tk
-import threading, sys, time, os, re, json, subprocess
+import ctypes
+import threading, sys, time, os, re, json, subprocess, shutil
+from pathlib import Path
 import pyautogui, requests
 from PIL import Image
 from pynput import keyboard
@@ -17,7 +19,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "1.5.4"
+VERSION   = "1.6.0"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -33,16 +35,275 @@ C_MUTED    = "#94a3b8"
 C_LOG_BG   = "#f8fafc"
 C_BORDER   = "#e2e8f0"
 
+
+def _rename_get_episode(name):
+    """从文件名中提取集数，优先识别“第 N 集”格式。"""
+    cleaned = re.sub(r"\(\d+\)\s*$", "", name).strip()
+    match = re.search(r"第\s*(\d+)\s*集", cleaned)
+    if match:
+        return int(match.group(1))
+    match = re.search(r"(\d+)\s*集", cleaned)
+    if match:
+        return int(match.group(1))
+    matches = re.findall(r"\d+", cleaned)
+    return int(matches[-1]) if matches else None
+
+
+def _rename_is_duplicate_copy(name):
+    return re.search(r"\(\d+\)\s*$", name) is not None
+
+
+def _rename_parse_template(template):
+    """将包含数字的示例模板拆成数字前缀和后缀。"""
+    match = re.search(r"\d+", template)
+    if not match:
+        return None
+    return template[:match.start()], template[match.end():]
+
+
+def _rename_plan(folder, prefix, suffix, extensions=(".mp4", ".srt", ".mp3", ".wav", ".mkv")):
+    """生成重命名计划，不修改文件。"""
+    ext_set = tuple(ext.lower() for ext in extensions)
+    files = [
+        filename for filename in sorted(os.listdir(folder))
+        if os.path.isfile(os.path.join(folder, filename))
+        and filename.lower().endswith(ext_set)
+    ]
+    files.sort(key=lambda filename: _rename_is_duplicate_copy(os.path.splitext(filename)[0]))
+
+    planned = []
+    skipped_duplicates = []
+    skipped_without_number = []
+    used_targets = set()
+    for filename in files:
+        stem, extension = os.path.splitext(filename)
+        number = _rename_get_episode(stem)
+        if number is None:
+            skipped_without_number.append(filename)
+            continue
+        new_name = f"{prefix}{number}{suffix}{extension}"
+        if new_name in used_targets:
+            skipped_duplicates.append((filename, new_name))
+            continue
+        used_targets.add(new_name)
+        planned.append((filename, new_name))
+    return planned, skipped_duplicates, skipped_without_number
+
 # ─── 工具函数 ──────────────────────────────────────────────
 def fmt_time(us):
     ms = int(us)//1000; s, ms = divmod(ms, 1000); m, s = divmod(s, 60); h, m = divmod(m, 60)
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
+
+class _MsvcString(ctypes.Structure):
+    _fields_ = [
+        ("storage", ctypes.c_ubyte * 16),
+        ("size", ctypes.c_size_t),
+        ("capacity", ctypes.c_size_t),
+    ]
+
+
+def _msvc_input_string(raw):
+    if isinstance(raw, str):
+        raw = raw.encode("utf-8")
+    backing = ctypes.create_string_buffer(raw + b"\0")
+    value = _MsvcString()
+    if len(raw) < 16:
+        value.storage[:len(raw)] = raw
+    else:
+        ctypes.c_void_p.from_buffer(value.storage).value = ctypes.addressof(backing)
+    value.size = len(raw)
+    value.capacity = max(15, len(raw))
+    return value, backing
+
+
+def _msvc_output_string(value):
+    if value.size > 256 * 1024 * 1024:
+        raise ValueError(f"剪映接口返回了异常的数据长度: {value.size}")
+    if value.capacity < 16:
+        return bytes(value.storage[:value.size])
+    pointer = ctypes.c_void_p.from_buffer(value.storage).value
+    if not pointer:
+        raise ValueError("剪映接口返回了空数据指针")
+    return ctypes.string_at(pointer, value.size)
+
+
+class JianyingDraftIO:
+    """使用当前安装的剪映接口读写新版加密 draft_content.json。"""
+
+    FACTORY_CTOR = b"??0DraftIOFactoryBase@draft_store@@QEAA@XZ"
+    CREATE_IO = b"?createIO@DraftIOFactoryBase@draft_store@@UEAA?AV?$shared_ptr@UIDraftIO@draft_store@@@std@@PEBV?$array@D$0CA@@4@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@4@@Z"
+    CALC_ENTROPY = b"?calcEntropyDynamicString@DraftIOFactoryBase@draft_store@@UEAA?AU?$pair@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$array@D$0CA@@2@@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@4@@Z"
+
+    def __init__(self, dll_path=None):
+        if os.name != "nt":
+            raise RuntimeError("加密草稿读写仅支持 Windows")
+        self.dll_path = Path(dll_path or self._find_videoeditor_dll()).resolve()
+        self._dll_dir = os.add_dll_directory(str(self.dll_path.parent))
+        self.library = ctypes.WinDLL(str(self.dll_path))
+        self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self._kernel32.GetProcAddress.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self._kernel32.GetProcAddress.restype = ctypes.c_void_p
+
+        self.factory = (ctypes.c_ubyte * 24)()
+        constructor = ctypes.CFUNCTYPE(
+            ctypes.c_void_p, ctypes.c_void_p
+        )(self._address(self.FACTORY_CTOR))
+        constructor(ctypes.addressof(self.factory))
+
+        self._create_io = ctypes.CFUNCTYPE(
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+            ctypes.c_void_p, ctypes.c_void_p
+        )(self._address(self.CREATE_IO))
+        self._calc_entropy = ctypes.CFUNCTYPE(
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
+        )(self._address(self.CALC_ENTROPY))
+
+    @staticmethod
+    def _find_videoeditor_dll():
+        candidates = []
+        override = os.environ.get("JIANYING_VIDEOEDITOR_DLL", "").strip()
+        if override:
+            candidates.append(Path(override))
+
+        roots = [
+            Path.home() / "JianyingPro",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "JianyingPro",
+            Path(os.environ.get("ProgramFiles", "")) / "JianyingPro",
+            Path(os.environ.get("ProgramFiles(x86)", "")) / "JianyingPro",
+            Path("D:/JianyingPro"),
+            Path("E:/JianyingPro"),
+        ]
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Bytedance\JianyingPro")
+            install_dir, _ = winreg.QueryValueEx(key, "installDir")
+            if install_dir:
+                roots.insert(0, Path(install_dir))
+        except Exception:
+            pass
+        for root in roots:
+            if not root.is_dir():
+                continue
+            direct = root / "videoeditor.dll"
+            if direct.is_file():
+                candidates.append(direct)
+            try:
+                candidates.extend(root.glob("*/videoeditor.dll"))
+                candidates.extend(root.glob("*/*/videoeditor.dll"))
+            except OSError:
+                pass
+
+        candidates = list({str(path.resolve()): path.resolve() for path in candidates if path.is_file()}.values())
+        if not candidates:
+            raise FileNotFoundError(
+                "未找到剪映 videoeditor.dll；可设置环境变量 JIANYING_VIDEOEDITOR_DLL 指向该文件"
+            )
+
+        def version_key(path):
+            numbers = tuple(int(part) for part in re.findall(r"\d+", path.parent.name))
+            try:
+                modified = path.stat().st_mtime
+            except OSError:
+                modified = 0
+            return numbers, modified
+
+        return max(candidates, key=version_key)
+
+    def _address(self, name):
+        result = self._kernel32.GetProcAddress(self.library._handle, name)
+        if not result:
+            raise RuntimeError(f"当前剪映版本缺少草稿接口: {name!r}")
+        return result
+
+    @staticmethod
+    def _attachment_path(draft_path):
+        draft_path = Path(draft_path).resolve()
+        parents = [draft_path.parent]
+        parents.extend(list(draft_path.parents)[1:5])
+        for parent in parents:
+            candidate = parent / "attachment_pc_common.json"
+            if candidate.is_file():
+                return candidate
+        raise FileNotFoundError(f"找不到 attachment_pc_common.json: {draft_path}")
+
+    def _entropy(self, draft_path):
+        attachment = self._attachment_path(draft_path)
+        source_text = attachment.read_text(encoding="utf-8-sig")
+        source, backing = _msvc_input_string(source_text)
+        result = (ctypes.c_ubyte * 64)()
+        self._calc_entropy(
+            ctypes.addressof(self.factory), ctypes.addressof(result), ctypes.addressof(source)
+        )
+        entropy = bytes(result[32:64])
+        if not any(entropy):
+            raise RuntimeError(f"无法计算草稿密钥: {draft_path}")
+        return entropy
+
+    def _open(self, draft_path):
+        draft_path = str(Path(draft_path).resolve())
+        entropy = (ctypes.c_ubyte * 32).from_buffer_copy(self._entropy(draft_path))
+        path_value, path_backing = _msvc_input_string(draft_path)
+        shared_io = (ctypes.c_void_p * 2)()
+        self._create_io(
+            ctypes.addressof(self.factory), ctypes.addressof(shared_io),
+            ctypes.addressof(entropy), ctypes.addressof(path_value)
+        )
+        object_pointer = shared_io[0]
+        if not object_pointer:
+            raise RuntimeError(f"无法打开剪映草稿: {draft_path}")
+        return object_pointer
+
+    @staticmethod
+    def _virtual(object_pointer, index, argtypes):
+        vtable = ctypes.c_void_p.from_address(object_pointer).value
+        address = ctypes.c_void_p.from_address(vtable + index * 8).value
+        return ctypes.CFUNCTYPE(ctypes.c_void_p, *argtypes)(address)
+
+    def read_json(self, draft_path):
+        object_pointer = self._open(draft_path)
+        result = (ctypes.c_ubyte * 0x58)()
+        read = self._virtual(
+            object_pointer, 3, (ctypes.c_void_p, ctypes.c_void_p)
+        )
+        read(object_pointer, ctypes.addressof(result))
+        result_code = ctypes.c_uint32.from_buffer(result, 0x48).value
+        detail = _msvc_output_string(_MsvcString.from_buffer(result, 0x28)).decode(
+            "utf-8", errors="replace"
+        )
+        raw = _msvc_output_string(_MsvcString.from_buffer(result, 0x08))
+        if result_code:
+            raise RuntimeError(f"剪映草稿解密失败({result_code}): {detail}")
+        try:
+            data = json.loads(raw.decode("utf-8-sig"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"剪映草稿解密后不是有效 JSON: {draft_path}") from exc
+        if not isinstance(data, dict):
+            raise RuntimeError(f"剪映草稿根节点不是对象: {draft_path}")
+        return data
+
+    def write_json(self, draft_path, data):
+        raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        object_pointer = self._open(draft_path)
+        value, backing = _msvc_input_string(raw)
+        result = (ctypes.c_ubyte * 0x30)()
+        write = self._virtual(
+            object_pointer, 7,
+            (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)
+        )
+        write(object_pointer, ctypes.addressof(result), ctypes.addressof(value))
+        result_code = ctypes.c_uint32.from_buffer(result, 0x20).value
+        detail = _msvc_output_string(_MsvcString.from_buffer(result)).decode(
+            "utf-8", errors="replace"
+        )
+        if result_code:
+            raise RuntimeError(f"剪映草稿加密写入失败({result_code}): {detail}")
+
 # ─── 主应用 ────────────────────────────────────────────────
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        ctk.set_appearance_mode("light")
+        ctk.set_appearance_mode("light")	
         ctk.set_default_color_theme("blue")
         
         self.title(f"剪映 AI ToolBox  v{VERSION}")
@@ -74,7 +335,6 @@ class App(ctk.CTk):
         self.api_model = "gemini-3.5-flash"
         self.drafts = []          
         self.sel_files = []
-        self.rename_map = []
         self.first_run = True
         self.first_sub = True
         
@@ -311,7 +571,7 @@ del /f /q "%~f0" >nul 2>&1
         
         if self.coords.get("export"):
             self.guide_lbl.configure(text="● 坐标已就绪", text_color=C_SUCCESS)
-
+    
         # 任务队列卡片
         card2 = self._card(tab)
         card2.pack(fill="both", expand=True, padx=4, pady=4)
@@ -362,7 +622,7 @@ del /f /q "%~f0" >nul 2>&1
         ctk.CTkButton(bf, text="⏹ 中断", width=70, height=36, corner_radius=8,
                       fg_color=C_DANGER, hover_color="#dc2626",
                       font=("Segoe UI", 12, "bold"), command=self._stop).pack(side="right")
-
+    
         # 日志
         card3 = self._card(tab)
         card3.pack(fill="both", expand=True, padx=4, pady=(2, 2))
@@ -399,7 +659,7 @@ del /f /q "%~f0" >nul 2>&1
         btn_frame = ctk.CTkFrame(tab, fg_color="transparent")
         btn_frame.pack(fill="x", padx=4, pady=10)
         
-        ctk.CTkButton(btn_frame, text="📥  提取字幕 & 删除轨道 → 桌面/srt", height=36,
+        ctk.CTkButton(btn_frame, text="📥  提取字幕 & 隐藏轨道 → 桌面/srt", height=36,
                       corner_radius=8, fg_color=C_WARN, hover_color="#d97706",
                       font=("Segoe UI", 12, "bold"), text_color="#ffffff",
                       command=self._sub_thread).pack(fill="x", pady=(0, 6))
@@ -420,7 +680,7 @@ del /f /q "%~f0" >nul 2>&1
         # 说明
         info_card = self._card(tab)
         info_card.pack(fill="x", padx=4)
-        for t in ["提取文本为 SRT 格式，并彻底删除原草稿字幕轨道",
+        for t in ["提取文本为 SRT 格式，并隐藏原草稿字幕轨道",
                    "统一字体：无差别替换所有草稿字体为 Noto Sans Bold",
                    "解除隐藏：恢复所有被隐藏(闭眼)的字幕轨道显示"]:
             ctk.CTkLabel(info_card, text=f"·  {t}", font=("Segoe UI", 11),
@@ -442,36 +702,118 @@ del /f /q "%~f0" >nul 2>&1
     # ────────── 重命名页 ──────────
     def _build_rename_tab(self):
         tab = self.tabs.tab("重命名")
+        self.rename_folder = ""
+        self.rename_plan = []
+
+        # 模式切换条 (明显标出：正则匹配重命名 vs AI 智能重命名)
+        card_mode = self._card(tab)
+        card_mode.pack(fill="x", padx=4, pady=(4, 4))
+        mode_row = ctk.CTkFrame(card_mode, fg_color="transparent")
+        mode_row.pack(fill="x", padx=8, pady=6)
+        ctk.CTkLabel(mode_row, text="模式选择:", font=("Segoe UI", 12, "bold"), text_color=C_TEXT).pack(side="left", padx=(0, 8))
+        self.ren_mode_seg = ctk.CTkSegmentedButton(
+            mode_row,
+            values=["正则匹配重命名", "AI 智能重命名"],
+            command=self._on_ren_mode_change,
+            font=("Segoe UI", 11, "bold"),
+            height=28
+        )
+        self.ren_mode_seg.set("正则匹配重命名")
+        self.ren_mode_seg.pack(side="left", fill="x", expand=True)
+
+        # 容器框架，用于动态切换两种模式的输入面板
+        self.ren_body_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        self.ren_body_frame.pack(fill="x", padx=0, pady=0)
+
+        # === 1. 正则匹配重命名 面板 ===
+        self.regex_container = ctk.CTkFrame(self.ren_body_frame, fg_color="transparent")
         
-        card1 = self._card(tab)
-        card1.pack(fill="x", padx=4, pady=(4, 6))
-        
-        row = ctk.CTkFrame(card1, fg_color="transparent")
-        row.pack(fill="x", padx=8, pady=8)
-        ctk.CTkButton(row, text="📁 选择文件", width=90, height=28, corner_radius=6,
+        card_reg1 = self._card(self.regex_container)
+        card_reg1.pack(fill="x", padx=4, pady=(2, 4))
+        ctk.CTkLabel(card_reg1, text="目标文件夹 [正则匹配]", font=("Segoe UI", 12, "bold"),
+                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(6, 0))
+        folder_row = ctk.CTkFrame(card_reg1, fg_color="transparent")
+        folder_row.pack(fill="x", padx=8, pady=(4, 6))
+        self.rename_folder_entry = ctk.CTkEntry(
+            folder_row, placeholder_text="选择包含视频或字幕的文件夹",
+            corner_radius=6, border_color=C_BORDER
+        )
+        self.rename_folder_entry.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(
+            folder_row, text="📁", width=36, height=28, corner_radius=6,
+            fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
+            command=self._browse_rename_folder
+        ).pack(side="left", padx=(6, 0))
+
+        card_reg2 = self._card(self.regex_container)
+        card_reg2.pack(fill="x", padx=4, pady=(2, 4))
+        ctk.CTkLabel(card_reg2, text="命名模板 [正则匹配]", font=("Segoe UI", 12, "bold"),
+                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(6, 0))
+        self.fmt_entry = ctk.CTkEntry(
+            card_reg2, placeholder_text="例：短剧名称_第1集",
+            corner_radius=6, border_color=C_BORDER
+        )
+        self.fmt_entry.insert(0, "短剧名称_第1集")
+        self.fmt_entry.pack(fill="x", padx=8, pady=(4, 2))
+        ctk.CTkLabel(
+            card_reg2, text="提示：模板中的数字会被自动替换为文件名提取出的集数",
+            font=("Segoe UI", 10), text_color=C_MUTED, anchor="w"
+        ).pack(fill="x", padx=8, pady=(0, 6))
+
+        self.regex_preview_btn = ctk.CTkButton(
+            self.regex_container, text="⚡  规则预览重命名 [正则匹配]", height=32, corner_radius=8,
+            fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
+            font=("Segoe UI", 11, "bold"), command=self._regex_preview_thread
+        )
+        self.regex_preview_btn.pack(fill="x", padx=4, pady=(2, 2))
+
+        # === 2. AI 智能重命名 面板 ===
+        self.ai_container = ctk.CTkFrame(self.ren_body_frame, fg_color="transparent")
+
+        card_ai1 = self._card(self.ai_container)
+        card_ai1.pack(fill="x", padx=4, pady=(2, 4))
+        ctk.CTkLabel(card_ai1, text="选择文件 / 文件夹 [AI 智能]", font=("Segoe UI", 12, "bold"),
+                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(6, 0))
+        ai_row = ctk.CTkFrame(card_ai1, fg_color="transparent")
+        ai_row.pack(fill="x", padx=8, pady=(4, 6))
+        ctk.CTkButton(ai_row, text="📁 选择文件", width=85, height=28, corner_radius=6,
                       fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
                       command=self._sel_vids).pack(side="left")
-        self.file_lbl = ctk.CTkLabel(row, text="未选择", font=("Segoe UI", 11),
-                                      text_color=C_MUTED)
-        self.file_lbl.pack(side="left", padx=10)
-        
-        card2 = self._card(tab)
-        card2.pack(fill="x", padx=4, pady=4)
-        ctk.CTkLabel(card2, text="命名格式", font=("Segoe UI", 12, "bold"),
-                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(8,0))
-        self.fmt_entry = ctk.CTkEntry(card2, placeholder_text="例: 短剧名_第X集",
-                                       corner_radius=6, border_color=C_BORDER)
-        self.fmt_entry.insert(0, "短剧名称_第X集")
-        self.fmt_entry.pack(fill="x", padx=8, pady=(6, 8))
-        
-        self.ren_preview_btn = ctk.CTkButton(tab, text="✨  AI 预览重命名", height=34, corner_radius=8,
-                      fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
-                      font=("Segoe UI", 11, "bold"), command=self._ren_preview_thread)
-        self.ren_preview_btn.pack(fill="x", padx=4, pady=(6, 2))
-        
-        self.ren_progress = ctk.CTkProgressBar(tab, mode="indeterminate", height=4, fg_color=C_BG)
+        ctk.CTkButton(ai_row, text="📂 载入文件夹", width=85, height=28, corner_radius=6,
+                      fg_color=C_BG, text_color=C_TEXT, hover_color=C_BORDER,
+                      command=self._load_folder_for_ai).pack(side="left", padx=(6, 0))
+        self.file_lbl = ctk.CTkLabel(ai_row, text="未选择", font=("Segoe UI", 11), text_color=C_MUTED)
+        self.file_lbl.pack(side="left", padx=8)
+
+        card_ai2 = self._card(self.ai_container)
+        card_ai2.pack(fill="x", padx=4, pady=(2, 4))
+        ctk.CTkLabel(card_ai2, text="命名格式 [AI 智能]", font=("Segoe UI", 12, "bold"),
+                     text_color=C_TEXT, anchor="w").pack(fill="x", padx=8, pady=(6, 0))
+        self.ai_fmt_entry = ctk.CTkEntry(
+            card_ai2, placeholder_text="例: 短剧名_第X集",
+            corner_radius=6, border_color=C_BORDER
+        )
+        self.ai_fmt_entry.insert(0, "短剧名称_第X集")
+        self.ai_fmt_entry.pack(fill="x", padx=8, pady=(4, 2))
+        ctk.CTkLabel(
+            card_ai2, text="提示：由 Google Gemini 大模型智能识别文件名并按格式推理重命名",
+            font=("Segoe UI", 10), text_color=C_MUTED, anchor="w"
+        ).pack(fill="x", padx=8, pady=(0, 6))
+
+        self.ai_preview_btn = ctk.CTkButton(
+            self.ai_container, text="✨  AI 预览重命名 [AI 智能]", height=32, corner_radius=8,
+            fg_color="#e0e7ff", text_color=C_PRIMARY, hover_color="#c7d2fe",
+            font=("Segoe UI", 11, "bold"), command=self._ai_preview_thread
+        )
+        self.ai_preview_btn.pack(fill="x", padx=4, pady=(2, 2))
+
+        self.ren_progress = ctk.CTkProgressBar(self.ai_container, mode="indeterminate", height=4, fg_color=C_BG)
         self.ren_progress.set(0)
-        
+
+        # 默认展示正则匹配面板
+        self.regex_container.pack(fill="x", expand=True)
+
+        # === 3. 共享预览表格 (清晰标出重命名方式) ===
         style = ttk.Style()
         style.configure("R.Treeview", background=C_CARD, foreground=C_TEXT,
                          fieldbackground=C_CARD, borderwidth=0, font=("Segoe UI", 10),
@@ -479,46 +821,103 @@ del /f /q "%~f0" >nul 2>&1
         style.configure("R.Treeview.Heading", background=C_BG, foreground=C_MUTED,
                          font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat")
         
-        cols = ("old", "new")
-        self.ren_tree = ttk.Treeview(tab, columns=cols, show="headings", height=4,
+        cols = ("old", "new", "mode")
+        self.ren_tree = ttk.Treeview(tab, columns=cols, show="headings", height=5,
                                       style="R.Treeview")
         self.ren_tree.heading("old", text="原文件名")
         self.ren_tree.heading("new", text="新文件名")
-        self.ren_tree.column("old", width=190)
-        self.ren_tree.column("new", width=190)
+        self.ren_tree.heading("mode", text="重命名方式")
+        self.ren_tree.column("old", width=175)
+        self.ren_tree.column("new", width=175)
+        self.ren_tree.column("mode", width=80, anchor="center")
         self.ren_tree.pack(fill="both", expand=True, padx=4, pady=2)
         
-        self.ren_btn = ctk.CTkButton(tab, text="✅  执行重命名", height=36, corner_radius=8,
+        self.ren_btn = ctk.CTkButton(tab, text="✅  执行重命名", height=34, corner_radius=8,
                                       fg_color=C_SUCCESS, hover_color="#16a34a",
                                       font=("Segoe UI", 12, "bold"), state="disabled",
                                       command=self._exec_rename)
-        self.ren_btn.pack(fill="x", padx=4, pady=6)
-        
+        self.ren_btn.pack(fill="x", padx=4, pady=(3, 6))
+
         # 注册拖放支持
         try:
             import windnd
             def _on_drop(files):
                 paths = [f.decode('gbk') if isinstance(f, bytes) else f for f in files]
-                valid = [p for p in paths if p.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.srt', '.ass'))]
+                if len(paths) == 1 and os.path.isdir(paths[0]):
+                    folder = paths[0]
+                    self.rename_folder_entry.delete(0, "end")
+                    self.rename_folder_entry.insert(0, folder)
+                    if self.ren_mode_seg.get() == "AI 智能重命名":
+                        self._load_folder_for_ai(folder)
+                    return
+                valid = [p for p in paths if p.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.srt', '.ass', '.wav', '.mp3'))]
                 if valid:
                     self.sel_files = list(set(self.sel_files + valid))
                     self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
+                    self.ren_mode_seg.set("AI 智能重命名")
+                    self._on_ren_mode_change("AI 智能重命名")
                     self.ren_btn.configure(state="disabled")
                     for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
             windnd.hook_dropfiles(self.winfo_id(), func=_on_drop)
         except Exception:
             pass
 
+    def _on_ren_mode_change(self, mode):
+        """切换重命名模式视图"""
+        for item in self.ren_tree.get_children():
+            self.ren_tree.delete(item)
+        self.rename_plan = []
+        self.ren_btn.configure(state="disabled")
+        if mode == "正则匹配重命名":
+            self.ai_container.pack_forget()
+            self.regex_container.pack(fill="x", expand=True)
+        else:
+            self.regex_container.pack_forget()
+            self.ai_container.pack(fill="x", expand=True)
+
+    def _browse_rename_folder(self):
+        folder = filedialog.askdirectory(title="选择要批量重命名的文件夹")
+        if folder:
+            self.rename_folder_entry.delete(0, "end")
+            self.rename_folder_entry.insert(0, folder)
+            self.rename_plan = []
+            for item in self.ren_tree.get_children():
+                self.ren_tree.delete(item)
+            self.ren_btn.configure(state="disabled")
+
     def _sel_vids(self):
         f = filedialog.askopenfilenames(
             title="选择视频或字幕文件（可多选）",
-            filetypes=[("视频/字幕", "*.mp4 *.mov *.avi *.mkv *.srt *.ass"), ("全部", "*.*")]
+            filetypes=[("视频/字幕", "*.mp4 *.mov *.avi *.mkv *.srt *.ass *.wav *.mp3"), ("全部", "*.*")]
         )
         if f:
             self.sel_files = list(f)
             self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
             self.ren_btn.configure(state="disabled")
             for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
+
+    def _load_folder_for_ai(self, folder=None):
+        if not folder:
+            folder = self.rename_folder_entry.get().strip().strip('"')
+        if not folder or not os.path.isdir(folder):
+            folder = filedialog.askdirectory(title="选择包含视频或字幕的文件夹")
+        if folder and os.path.isdir(folder):
+            self.rename_folder_entry.delete(0, "end")
+            self.rename_folder_entry.insert(0, folder)
+            valid_exts = ('.mp4', '.mov', '.avi', '.mkv', '.srt', '.ass', '.wav', '.mp3')
+            files = [
+                os.path.join(folder, f) for f in sorted(os.listdir(folder))
+                if os.path.isfile(os.path.join(folder, f)) and f.lower().endswith(valid_exts)
+            ]
+            if files:
+                self.sel_files = files
+                self.file_lbl.configure(text=f"{len(self.sel_files)} 个文件")
+                for item in self.ren_tree.get_children():
+                    self.ren_tree.delete(item)
+                self.ren_btn.configure(state="disabled")
+                self._log(f"已从文件夹载入 {len(files)} 个文件用于 AI 重命名")
+            else:
+                self._show_toast("未找到有效文件", "该文件夹下没有常见的视频或字幕文件", C_WARN)
 
     # ────────── 设置页 ──────────
     def _build_settings_tab(self):
@@ -557,7 +956,7 @@ del /f /q "%~f0" >nul 2>&1
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=8, pady=(0,8))
         
-        ctk.CTkLabel(row, text="作者 - 塔奇", font=("Segoe UI", 11), text_color=C_MUTED).pack(side="left")
+        ctk.CTkLabel(row, text="作者 - 塔奇 修改 - 小马", font=("Segoe UI", 11), text_color=C_MUTED).pack(side="left")
         
         ctk.CTkButton(row, text="保存设置", height=32, corner_radius=6,
                       fg_color=C_PRIMARY, font=("Segoe UI", 11),
@@ -584,12 +983,12 @@ del /f /q "%~f0" >nul 2>&1
     def _log(self, msg):
         print(msg)
 
-    # ═══════════════════════ 坐标向导 ═══════════════════════
+# ═══════════════════════ 坐标向导 ═══════════════════════
     def _start_wizard(self):
         self.rec_state = "export"
         self.guide_lbl.configure(text="[1/5] 鼠标放在【导出】上 → 按 F8", text_color=C_PRIMARY)
         self._log("向导开始，请按 F8 录制各按钮位置")
-
+    
     def _capture_btn_template(self, x, y, name):
         """录制时截取按钮区域保存为模板图片"""
         try:
@@ -623,7 +1022,7 @@ del /f /q "%~f0" >nul 2>&1
                 self.coords[self.rec_state] = None
                 self._log(f"  ✓ 跳过 {self.rec_state}")
                 self._next_rec()
-
+    
     def _next_rec(self):
         flow = {
             "export":      ("confirm",     "2/5 点导出呼出弹窗 → 鼠标在【确认导出】上 → F8"),
@@ -924,7 +1323,7 @@ del /f /q "%~f0" >nul 2>&1
 
     def _sub_thread(self):
         def _run():
-            self._ask_yes_no("安全确认", "确定执行？此操作将彻底删除字幕轨道", lambda: threading.Thread(target=self._extract_subs, daemon=True).start())
+            self._ask_yes_no("安全确认", "确定执行？此操作将提取 SRT 并隐藏字幕轨道", lambda: threading.Thread(target=self._extract_subs, daemon=True).start())
         self._check_first_sub(_run)
 
     def _fix_font_thread(self):
@@ -954,29 +1353,32 @@ del /f /q "%~f0" >nul 2>&1
         self._check_first_sub(_run)
 
     def _unhide_tracks(self):
+        if self._jianying_is_running():
+            self._log("✗ 请先完全退出剪映，再执行解除隐藏")
+            self.after(0, lambda: self._show_toast("剪映仍在运行", "请完全退出剪映后重试", C_WARN, 6000))
+            return
         base = self.draft_dir.get()
         if not os.path.exists(base): self._log("✗ 草稿根目录不存在"); return
         items = []
         for fn in os.listdir(base):
             fp = os.path.join(base, fn)
-            jp = os.path.join(fp, 'draft_content.json')
-            if os.path.isdir(fp) and os.path.exists(jp):
-                items.append((fn, jp))
+            if os.path.isdir(fp):
+                items.append((fn, fp))
         ok = 0
-        for fn, jp in items:
+        for fn, draft_dir in items:
             try:
-                with open(jp, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                for t in data.get('tracks', []):
-                    if t.get('type') == 'text':
-                        t['attribute'] = 0
-                with open(jp, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False)
-                bak_path = jp + ".bak"
-                if os.path.exists(bak_path):
-                    with open(bak_path, 'w', encoding='utf-8') as f:
-                        json.dump(data, f, ensure_ascii=False)
-                self._log(f"  ✓ {fn} 已解除隐藏")
+                subtitle_jsons, _ = self._find_subtitle_jsons(draft_dir)
+                if not subtitle_jsons:
+                    continue
+                track_copies = 0
+                for _, data, _ in subtitle_jsons:
+                    track_copies += self._set_text_tracks_hidden(data, False)
+                backups = self._save_subtitle_jsons(subtitle_jsons)
+                self._log(
+                    f"  ✓ {fn} 已解除隐藏 "
+                    f"(同步 {len(subtitle_jsons)} 份，恢复 {track_copies} 条文字轨道，"
+                    f"备份 {len(backups)} 份)"
+                )
                 ok += 1
             except Exception as e:
                 self._log(f"  ✗ {fn} 失败: {e}")
@@ -1032,88 +1434,285 @@ del /f /q "%~f0" >nul 2>&1
         self._log(f"完成，共处理 {ok} 个草稿")
         self.after(0, lambda: self._show_toast("处理完成", f"成功统一 {ok} 个草稿字体\n使用: {font_path}", C_SUCCESS, 6000))
 
+    def _load_plain_draft_json(self, path):
+        """读取未加密的草稿 JSON；新版编码文件返回 None。"""
+        try:
+            with open(path, 'r', encoding='utf-8-sig') as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else None
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+
+    @staticmethod
+    def _jianying_is_running():
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq JianyingPro.exe", "/NH"],
+                capture_output=True, text=True, errors="ignore",
+                creationflags=0x08000000, timeout=5
+            )
+            return "JianyingPro.exe" in result.stdout
+        except Exception:
+            return False
+
+    def _encrypted_draft_io(self):
+        draft_io = getattr(self, "_jianying_draft_io", None)
+        if draft_io is None:
+            draft_io = JianyingDraftIO()
+            self._jianying_draft_io = draft_io
+            self._log(f"  · 已加载剪映草稿接口: {draft_io.dll_path}")
+        return draft_io
+
+    def _find_subtitle_jsons(self, draft_dir):
+        """读取根草稿和多时间线，支持明文及新版剪映加密格式。"""
+        candidates = [os.path.join(draft_dir, 'draft_content.json')]
+        timelines_dir = os.path.join(draft_dir, 'Timelines')
+        if os.path.isdir(timelines_dir):
+            for timeline_id in sorted(os.listdir(timelines_dir)):
+                timeline_dir = os.path.join(timelines_dir, timeline_id)
+                if not os.path.isdir(timeline_dir):
+                    continue
+                candidates.append(os.path.join(timeline_dir, 'draft_content.json'))
+
+        subtitle_jsons, encoded_drafts, load_errors, seen = [], [], [], set()
+        for path in candidates:
+            norm = os.path.normcase(os.path.abspath(path))
+            if norm in seen or not os.path.isfile(path):
+                continue
+            seen.add(norm)
+            data = self._load_plain_draft_json(path)
+            storage = "plain"
+            if data is None:
+                try:
+                    data = self._encrypted_draft_io().read_json(path)
+                    storage = "encrypted"
+                    encoded_drafts.append(path)
+                except Exception as exc:
+                    load_errors.append(f"{path}: {exc}")
+                    continue
+            text_tracks = [t for t in data.get('tracks', []) if t.get('type') == 'text']
+            if text_tracks and data.get('materials', {}).get('texts'):
+                subtitle_jsons.append((path, data, storage))
+        if not subtitle_jsons and load_errors:
+            raise RuntimeError("；".join(load_errors))
+        return subtitle_jsons, encoded_drafts
+
+    def _subtitle_lines(self, data):
+        texts = data.get('materials', {}).get('texts', [])
+        text_by_id = {t.get('id'): t for t in texts if t.get('id')}
+        segments = []
+        for track in data.get('tracks', []):
+            if track.get('type') == 'text':
+                segments.extend(track.get('segments', []))
+        segments.sort(key=lambda x: x.get('target_timerange', {}).get('start', 0))
+
+        lines = []
+        for segment in segments:
+            material = text_by_id.get(segment.get('material_id'))
+            if not material:
+                continue
+            content = material.get('content', {})
+            if isinstance(content, str):
+                try:
+                    content = json.loads(content)
+                except json.JSONDecodeError:
+                    content = {'text': content}
+            text = content.get('text', '') if isinstance(content, dict) else ''
+            text = text or material.get('recognize_text', '') or material.get('base_content', '')
+            if not isinstance(text, str) or not text.strip():
+                continue
+            timerange = segment.get('target_timerange', {})
+            start = int(timerange.get('start', 0))
+            duration = int(timerange.get('duration', 0))
+            lines.extend([
+                str(len(lines) // 4 + 1),
+                f"{fmt_time(start)} --> {fmt_time(start + duration)}",
+                text.strip(),
+                "",
+            ])
+        return lines
+
+    def _set_text_tracks_hidden(self, data, hidden=True):
+        """切换文字轨道可见状态，保留轨道、片段和字幕素材。"""
+        text_tracks = [t for t in data.get('tracks', []) if t.get('type') == 'text']
+        for track in text_tracks:
+            for segment in track.get('segments', []):
+                segment['visible'] = not hidden
+        return len(text_tracks)
+
+    def _save_subtitle_jsons(self, subtitle_jsons):
+        """先备份全部目标，再原子写入；任一写入失败则恢复所有文件。"""
+        stamp = time.strftime('%Y%m%d_%H%M%S') + f"_{int(time.time() * 1000) % 1000:03d}"
+        backups = []
+        try:
+            for path, _, _ in subtitle_jsons:
+                backup = f"{path}.before_subtitle_{stamp}.bak"
+                shutil.copy2(path, backup)
+                backups.append((path, backup))
+            for path, data, storage in subtitle_jsons:
+                if storage == "encrypted":
+                    self._encrypted_draft_io().write_json(path, data)
+                    verified = self._encrypted_draft_io().read_json(path)
+                else:
+                    temp_path = f"{path}.subtitle.tmp"
+                    try:
+                        with open(temp_path, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
+                        os.replace(temp_path, path)
+                    finally:
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
+                    verified = self._load_plain_draft_json(path)
+                if verified != data:
+                    raise RuntimeError(f"写入后校验不一致，已回滚: {path}")
+        except Exception:
+            for path, backup in backups:
+                if os.path.exists(backup):
+                    shutil.copy2(backup, path)
+            raise
+        return [backup for _, backup in backups]
+
     def _extract_subs(self):
         self._log("提取字幕...")
+        if self._jianying_is_running():
+            self._log("✗ 请先完全退出剪映，再提取并隐藏字幕")
+            self.after(0, lambda: self._show_toast("剪映仍在运行", "请完全退出剪映后重试", C_WARN, 6000))
+            return
         base = self.draft_dir.get()
-        if not os.path.exists(base): self._log("✗ 目录不存在"); return
+        if not os.path.exists(base):
+            self._log("✗ 目录不存在")
+            return
         out = os.path.join(os.path.expanduser("~"), "Desktop", "srt")
         os.makedirs(out, exist_ok=True)
-        
+
         items = []
-        for fn in os.listdir(base):
-            fp = os.path.join(base, fn)
-            if not os.path.isdir(fp) or fn == 'srt': continue
-            jp = os.path.join(fp, 'draft_content.json')
-            if not os.path.exists(jp): continue
-            items.append({"jp": jp, "fn": fn})
-        
+        for name in os.listdir(base):
+            draft_dir = os.path.join(base, name)
+            if os.path.isdir(draft_dir) and name != 'srt':
+                items.append((name, draft_dir))
+
         ok = 0
-        for d in items:
+        failed = 0
+        for name, draft_dir in items:
             try:
-                with open(d["jp"], 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                td = {t['id']: t for t in data.get('materials', {}).get('texts', [])}
-                tracks = data.get('tracks', [])
-                text_tracks = [t for t in tracks if t.get('type') == 'text']
-                
-                if not text_tracks: continue
-                
-                segs = []
-                for tr in text_tracks: segs.extend(tr.get('segments', []))
-                segs.sort(key=lambda x: x.get('target_timerange', {}).get('start', 0))
-                
-                lines, idx = [], 1
-                for seg in segs:
-                    tm = td.get(seg.get('material_id'))
-                    if not tm: continue
-                    try: txt = json.loads(tm.get('content', '{}')).get('text', '')
-                    except: txt = tm.get('content', '')
-                    if not txt.strip(): continue
-                    tr = seg.get('target_timerange', {}); s = tr.get('start', 0)
-                    lines += [str(idx), f"{fmt_time(s)} --> {fmt_time(s+tr.get('duration',0))}", txt.strip(), ""]
-                    idx += 1
-                
-                if lines:
-                    # 命名为原草稿文件夹名
-                    sp = os.path.join(out, f"{d['fn']}.srt")
-                    with open(sp, 'w', encoding='utf-8') as f:
-                        f.write("\n".join(lines))
-                    
-                    # 彻底删除字幕轨道
-                    data['tracks'] = [t for t in tracks if t.get('type') != 'text']
-                    
-                    # 同时清理 texts 素材库，防止残留
-                    if 'materials' in data and 'texts' in data['materials']:
-                        data['materials']['texts'] = []
-                        
-                    # 保存主配置
-                    with open(d["jp"], 'w', encoding='utf-8') as f:
-                        json.dump(data, f, ensure_ascii=False)
-                    
-                    # 同步覆盖 .bak 文件，防止剪映自动恢复
-                    bak_path = d["jp"] + ".bak"
-                    if os.path.exists(bak_path):
-                        with open(bak_path, 'w', encoding='utf-8') as f:
-                            json.dump(data, f, ensure_ascii=False)
-                    
-                    self._log(f"  ✓ {d['fn']} → {os.path.basename(sp)}")
-                    ok += 1
-            except Exception as e: self._log(f"  ✗ {d['fn']}: {e}")
-        self._log(f"完成，提取并删除字幕 {ok} 个")
-        self.after(0, lambda: self._show_toast("提取完成", f"共处理 {ok} 个草稿\n字幕已保存至桌面/srt", C_SUCCESS, 6000))
+                subtitle_jsons, encoded_drafts = self._find_subtitle_jsons(draft_dir)
+                if not subtitle_jsons:
+                    continue
+                if encoded_drafts:
+                    self._log(f"  · {name} 已通过剪映接口解密 {len(encoded_drafts)} 份 draft_content.json")
+
+                # 根目录与 Timelines 中可能有镜像，只从第一份提取一次 SRT。
+                lines = self._subtitle_lines(subtitle_jsons[0][1])
+                if not lines:
+                    raise ValueError("检测到文字轨道，但没有可提取的字幕文本")
+
+                srt_path = os.path.join(out, f"{name}.srt")
+                srt_temp = f"{srt_path}.tmp"
+                with open(srt_temp, 'w', encoding='utf-8') as f:
+                    f.write("\n".join(lines))
+                os.replace(srt_temp, srt_path)
+
+                hidden_track_copies = 0
+                for _, data, _ in subtitle_jsons:
+                    hidden_track_copies += self._set_text_tracks_hidden(data, True)
+                backups = self._save_subtitle_jsons(subtitle_jsons)
+
+                self._log(
+                    f"  ✓ {name} → {os.path.basename(srt_path)} "
+                    f"(同步 {len(subtitle_jsons)} 份，隐藏 {hidden_track_copies} 条文字轨道副本，"
+                    f"备份 {len(backups)} 份)"
+                )
+                ok += 1
+            except Exception as e:
+                self._log(f"  ✗ {name}: {e}")
+                failed += 1
+        self._log(f"完成，成功提取并隐藏 {ok} 个，失败 {failed} 个")
+        if failed:
+            self.after(0, lambda: self._show_toast(
+                "部分处理失败", f"成功 {ok} 个，失败 {failed} 个\n请查看日志，失败草稿已自动回滚", C_WARN, 8000
+            ))
+        else:
+            self.after(0, lambda: self._show_toast(
+                "提取完成", f"共处理 {ok} 个草稿\n字幕已保存至桌面/srt，原轨道已隐藏", C_SUCCESS, 6000
+            ))
 
     # ═══════════════════════ 重命名 ═══════════════════════
     def _ren_preview_thread(self):
-        if not self.sel_files: self._show_toast("提示", "请先选择视频/字幕文件", C_WARN); return
-        self.ren_preview_btn.configure(state="disabled", text="⏳ AI 正在思考中...")
+        mode = self.ren_mode_seg.get() if hasattr(self, "ren_mode_seg") else "正则匹配重命名"
+        if mode == "AI 智能重命名":
+            self._ai_preview_thread()
+        else:
+            self._regex_preview_thread()
+
+    def _regex_preview_thread(self):
+        folder = self.rename_folder_entry.get().strip().strip('"')
+        template = self.fmt_entry.get().strip()
+        if not folder:
+            self._show_toast("提示", "请先选择目标文件夹", C_WARN)
+            return
+        if not os.path.isdir(folder):
+            self._show_toast("路径错误", "目标文件夹不存在", C_WARN)
+            return
+        parsed = _rename_parse_template(template)
+        if not parsed:
+            self._show_toast("模板错误", "模板必须包含一个数字，例如：短剧名称_第1集", C_WARN)
+            return
+
+        prefix, suffix = parsed
+        self.rename_folder = folder
+        plan, skipped_duplicates, skipped_without_number = _rename_plan(
+            folder, prefix, suffix
+        )
+        for item in self.ren_tree.get_children():
+            self.ren_tree.delete(item)
+
+        self.rename_plan = []
+        for old_name, new_name in plan:
+            source = os.path.join(folder, old_name)
+            target = os.path.join(folder, new_name)
+            self.rename_plan.append({
+                "source": source,
+                "target": target,
+                "old_name": old_name,
+                "new_name": new_name,
+                "mode": "正则匹配"
+            })
+            self.ren_tree.insert("", "end", values=(old_name, new_name, "正则匹配"))
+
+        if skipped_duplicates:
+            self._log("【正则匹配】检测到重复集数，以下文件跳过：")
+            for old_name, target in skipped_duplicates:
+                self._log(f"  {old_name} -> {target}")
+        if skipped_without_number:
+            self._log("【正则匹配】以下文件名没有识别到集数，已跳过：")
+            for filename in skipped_without_number:
+                self._log(f"  {filename}")
+        if not self.rename_plan:
+            self.ren_btn.configure(state="disabled")
+            self._show_toast("没有可改名文件", "【正则匹配】没有生成有效的重命名计划", C_WARN)
+            return
+
+        self.ren_btn.configure(state="normal")
+        self._log(f"✓ 【正则匹配重命名】预览完成，共 {len(self.rename_plan)} 个文件")
+
+    def _ai_preview_thread(self):
+        if not getattr(self, "sel_files", None):
+            folder = self.rename_folder_entry.get().strip().strip('"')
+            if folder and os.path.isdir(folder):
+                self._load_folder_for_ai(folder)
+            if not getattr(self, "sel_files", None):
+                self._show_toast("提示", "请先选择视频/字幕文件或载入文件夹", C_WARN)
+                return
+        self.ai_preview_btn.configure(state="disabled", text="⏳ AI 正在思考中...")
         self.ren_progress.pack(fill="x", padx=12, pady=(0, 4))
         self.ren_progress.start()
-        threading.Thread(target=self._ren_preview, daemon=True).start()
+        threading.Thread(target=self._ai_preview, daemon=True).start()
 
-    def _ren_preview(self):
-        self._log("AI 分析重命名...")
+    def _ai_preview(self):
+        self._log("【AI 智能重命名】开始分析...")
         fns = [os.path.basename(f) for f in self.sel_files]
-        prompt = (f"Rename these files to: {self.fmt_entry.get()}\n"
+        fmt = self.ai_fmt_entry.get().strip() or "短剧名称_第X集"
+        prompt = (f"Rename these files to: {fmt}\n"
                   f"Files: {json.dumps(fns, ensure_ascii=False)}\n"
                   f"Return ONLY raw JSON array with 'old' and 'new' keys.")
         try:
@@ -1126,41 +1725,109 @@ del /f /q "%~f0" >nul 2>&1
                 if t.startswith(pfx): t = t[len(pfx):]
             if t.endswith("```"): t = t[:-3]
             data = json.loads(t.strip())
-            self.after(0, self._fill_ren, data)
+            self.after(0, self._fill_ai_ren, data)
         except Exception as e: 
             msg = self._get_api_err_msg(e)
-            self._log(f"✗ {msg}")
+            self._log(f"✗ 【AI 重命名失败】{msg}")
             self.after(0, lambda m=msg: self._show_toast("AI 重命名失败", m, C_DANGER, 6000))
-            self.after(0, self._reset_ren_ui)
+            self.after(0, self._reset_ai_ren_ui)
 
-    def _reset_ren_ui(self):
-        self.ren_preview_btn.configure(state="normal", text="✨  AI 预览重命名")
+    def _reset_ai_ren_ui(self):
+        self.ai_preview_btn.configure(state="normal", text="✨  AI 预览重命名 [AI 智能]")
         self.ren_progress.stop()
         self.ren_progress.pack_forget()
 
-    def _fill_ren(self, data):
-        self._reset_ren_ui()
-        for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
+    def _fill_ai_ren(self, data):
+        self._reset_ai_ren_ui()
+        for i in self.ren_tree.get_children():
+            self.ren_tree.delete(i)
         dm = {os.path.basename(f): os.path.dirname(f) for f in self.sel_files}
-        self.rename_map = []
+        self.rename_plan = []
         for it in data:
             o, n = it.get("old"), it.get("new")
             if o and n and o in dm:
-                d = dm[o]; self.rename_map.append((os.path.join(d, o), os.path.join(d, n)))
-                self.ren_tree.insert("", "end", values=(o, n))
-        self.ren_btn.configure(state="normal")
-        self._log("✓ 预览已生成")
+                d = dm[o]
+                source = os.path.join(d, o)
+                target = os.path.join(d, n)
+                self.rename_plan.append({
+                    "source": source,
+                    "target": target,
+                    "old_name": o,
+                    "new_name": n,
+                    "mode": "AI重命名"
+                })
+                self.ren_tree.insert("", "end", values=(o, n, "AI重命名"))
+        if self.rename_plan:
+            self.ren_btn.configure(state="normal")
+            self._log(f"✓ 【AI 智能重命名】预览已生成，共 {len(self.rename_plan)} 个文件")
+        else:
+            self.ren_btn.configure(state="disabled")
+            self._show_toast("AI 未返回匹配文件", "未能成功生成匹配规则，请检查格式或文件列表", C_WARN)
 
     def _exec_rename(self):
-        if not self.rename_map: return
+        if not self.rename_plan:
+            return
+        if not self._ask_rename_confirmation():
+            return
         ok = 0
-        for o, n in self.rename_map:
-            try: os.rename(o, n); ok += 1
-            except: pass
-        self._show_toast("重命名完成", f"成功修改 {ok}/{len(self.rename_map)} 个文件", C_SUCCESS)
-        self.sel_files = []; self.file_lbl.configure(text="未选择")
+        skipped = 0
+        errors = 0
+        total = len(self.rename_plan)
+        current_mode = self.ren_mode_seg.get() if hasattr(self, "ren_mode_seg") else "重命名"
+
+        for item in self.rename_plan:
+            source = item["source"]
+            target = item["target"]
+            old_name = item["old_name"]
+            new_name = item["new_name"]
+            if source == target or old_name == new_name:
+                continue
+            if os.path.exists(target):
+                skipped += 1
+                self._log(f"  跳过，目标已存在：{new_name}")
+                continue
+            try:
+                os.rename(source, target)
+                ok += 1
+            except OSError as exc:
+                errors += 1
+                self._log(f"  ✗ {old_name}: {exc}")
+
+        self._show_toast(
+            f"【{current_mode}】完成" if not errors else f"【{current_mode}】部分完成",
+            f"成功 {ok}/{total} 个，已存在 {skipped} 个，失败 {errors} 个",
+            C_SUCCESS if not errors else C_WARN,
+        )
+        self.rename_plan = []
+        self.sel_files = []
+        if hasattr(self, "file_lbl"):
+            self.file_lbl.configure(text="未选择")
         for i in self.ren_tree.get_children(): self.ren_tree.delete(i)
         self.ren_btn.configure(state="disabled")
+
+    def _ask_rename_confirmation(self):
+        """执行前复用应用确认框，避免预览后误改文件。"""
+        result = {"confirmed": False}
+        current_mode = self.ren_mode_seg.get() if hasattr(self, "ren_mode_seg") else "重命名"
+        dialog = ctk.CTkFrame(self, fg_color=C_CARD, corner_radius=12, border_width=2, border_color=C_BORDER)
+        dialog.place(relx=0.5, rely=0.5, anchor="center")
+        ctk.CTkLabel(dialog, text=f"确认【{current_mode}】", font=("Segoe UI", 14, "bold"), text_color=C_TEXT).pack(pady=(20, 10))
+        ctk.CTkLabel(
+            dialog,
+            text=f"将使用【{current_mode}】修改 {len(self.rename_plan)} 个文件，是否继续？",
+            font=("Segoe UI", 12), text_color=C_TEXT,
+        ).pack(pady=(0, 20), padx=24)
+        buttons = ctk.CTkFrame(dialog, fg_color="transparent")
+        buttons.pack(fill="x", padx=20, pady=(0, 20))
+
+        def close(confirmed):
+            result["confirmed"] = confirmed
+            dialog.destroy()
+
+        ctk.CTkButton(buttons, text="取消", width=80, command=lambda: close(False)).pack(side="left", padx=4)
+        ctk.CTkButton(buttons, text="确认", width=80, fg_color=C_PRIMARY, command=lambda: close(True)).pack(side="right", padx=4)
+        self.wait_window(dialog)
+        return result["confirmed"]
 
 # ─── 启动 ──────────────────────────────────────────────────
 if __name__ == "__main__":
