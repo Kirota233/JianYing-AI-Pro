@@ -20,7 +20,7 @@ pyautogui.FAILSAFE = False
 
 # ─── 版本与授权 ─────────────────────────────────────────────
 AUTH_URL  = "https://raw.githubusercontent.com/Kirota233/JianYing-AI-Pro/master/auth.json"
-VERSION   = "2.0"
+VERSION   = "2.0.1"
 CFG_FILE  = "config.json"
 DEFAULT_KEY = "AIzaSyDQ4s-9ynGQcJw6oNDF5G2fNewnuF1zkaY"
 
@@ -301,11 +301,11 @@ class JianyingDraftIO:
             raise RuntimeError(f"剪映草稿加密写入失败({result_code}): {detail}")
 
 
-BANKNOTE_HTML = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>JIANYING AI PRO v2.0.0</title>\n<style>\n  :root {\n    --bg-ivory: #FBF9F5;\n    --bg-audit: #F2EFE9;\n    --bg-card: #FFFFFF;\n    --crimson: #9E1B16;\n    --crimson-hover: #7D1410;\n    --ink: #1A1817;\n    --muted: #6E6A63;\n    --border-line: #D6D1C7;\n    --emerald: #0B6E4F;\n    --amber: #B45309;\n    --danger: #B91C1C;\n    --font-sans: \'Inter\', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;\n    --font-mono: \'JetBrains Mono\', \'Consolas\', \'SFMono-Regular\', monospace;\n  }\n\n  * {\n    box-sizing: border-box;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, body {\n    width: 100%;\n    height: 100%;\n    overflow: hidden;\n    font-family: var(--font-sans);\n    color: var(--ink);\n    background-color: var(--bg-ivory);\n    background-image:\n      repeating-linear-gradient(\n        0deg,\n        transparent,\n        transparent 3px,\n        rgba(158, 27, 22, 0.035) 3px,\n        rgba(158, 27, 22, 0.035) 4px\n      ),\n      repeating-linear-gradient(\n        90deg,\n        transparent,\n        transparent 23px,\n        rgba(26, 24, 23, 0.02) 23px,\n        rgba(26, 24, 23, 0.02) 24px\n      );\n    user-select: none;\n    -webkit-font-smoothing: antialiased;\n  }\n\n  /* 单栏上下布局：上为主体工作区，下为日志与状态区 */\n  .banknote-shell {\n    width: 112.36vw;\n    height: 112.36vh;\n    zoom: 0.89;\n    border: 2px solid var(--ink);\n    display: flex;\n    flex-direction: column;\n    position: relative;\n    overflow: hidden;\n  }\n\n  /* 一体化可拖拽自定义瑞士顶栏 */\n  .custom-titlebar {\n    height: 30px;\n    background: var(--ink);\n    color: var(--bg-ivory);\n    border-bottom: 1.5px solid var(--ink);\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    padding: 0 0 0 12px;\n    flex-shrink: 0;\n    cursor: move;\n  }\n  .ct-brand {\n    display: flex;\n    align-items: center;\n    gap: 8px;\n    font-family: var(--font-mono);\n    font-size: 11px;\n    font-weight: 800;\n    letter-spacing: 0.06em;\n  }\n  .ct-cross {\n    background: var(--crimson);\n    color: #FFFFFF;\n    width: 16px;\n    height: 16px;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    font-size: 11px;\n    font-weight: 900;\n  }\n  .ct-controls {\n    display: flex;\n    height: 100%;\n  }\n  .ct-btn {\n    width: 34px;\n    height: 100%;\n    border: none;\n    border-left: 1px solid #33302E;\n    background: transparent;\n    color: var(--bg-ivory);\n    font-family: var(--font-mono);\n    font-size: 12px;\n    font-weight: 700;\n    cursor: pointer;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    transition: background 0.1s;\n  }\n  .ct-btn:hover {\n    background: #33302E;\n  }\n  .ct-btn.close:hover {\n    background: var(--crimson);\n    color: #FFFFFF;\n  }\n\n  /* =========================================================\n     TOP & MAIN WORKSPACE\n     ========================================================= */\n  .bn-center {\n    padding: 10px 14px 8px 14px;\n    display: flex;\n    flex-direction: column;\n    flex: 1;\n    overflow: hidden;\n  }\n\n  /* Version & Coordinate Status Bar */\n  .sn-bar {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    margin-bottom: 2px;\n  }\n\n  .sn-code {\n    font-family: var(--font-mono);\n    font-size: 11px;\n    font-weight: 800;\n    letter-spacing: 0.04em;\n    color: var(--crimson);\n  }\n\n  .coord-stamp {\n    font-family: var(--font-mono);\n    font-size: 10px;\n    font-weight: 700;\n    padding: 2px 8px;\n    background: var(--crimson);\n    color: #FFFFFF;\n    border: 1px solid var(--ink);\n    white-space: nowrap;\n  }\n  .coord-stamp.ready {\n    background: var(--emerald);\n  }\n  .coord-stamp.recording {\n    background: var(--amber);\n  }\n\n  .title-bar {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    padding-bottom: 6px;\n    border-bottom: 2px solid var(--ink);\n  }\n\n  .main-title {\n    font-size: 18px;\n    font-weight: 900;\n    letter-spacing: -0.02em;\n    color: var(--ink);\n  }\n\n  /* 4-Tab Navigation */\n  .bn-tabs {\n    display: grid;\n    grid-template-columns: repeat(4, 1fr);\n    border: 1.5px solid var(--ink);\n    margin: 8px 0;\n    background: var(--ink);\n    gap: 1px;\n  }\n\n  .bn-tab {\n    background: var(--bg-card);\n    color: var(--ink);\n    padding: 6px 4px;\n    font-size: 11px;\n    font-weight: 800;\n    text-align: center;\n    cursor: pointer;\n    transition: all 0.1s ease;\n    font-family: var(--font-sans);\n    border: none;\n    outline: none;\n    white-space: nowrap;\n  }\n  .bn-tab:hover {\n    background: var(--bg-audit);\n  }\n  .bn-tab.active {\n    background: var(--ink);\n    color: var(--bg-ivory);\n  }\n\n  /* Module Stage Panels */\n  .module-panel {\n    display: none;\n    flex: 1;\n    flex-direction: column;\n    justify-content: space-between;\n    overflow: hidden;\n  }\n  .module-panel.active {\n    display: flex;\n  }\n\n  /* Swiss Ledger Box */\n  .ledger-box {\n    border: 1.5px solid var(--ink);\n    background: var(--bg-card);\n    padding: 8px 10px;\n    display: flex;\n    flex-direction: column;\n    box-shadow: 2px 2px 0px rgba(26, 24, 23, 0.06);\n  }\n  .ledger-box.grow {\n    flex: 1;\n    overflow: hidden;\n    margin-bottom: 8px;\n  }\n\n  .ledger-hdr {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    font-size: 11px;\n    font-weight: 800;\n    color: var(--ink);\n    border-bottom: 1.5px solid var(--ink);\n    padding-bottom: 4px;\n    margin-bottom: 6px;\n  }\n\n  /* Table Container */\n  .table-scroll {\n    flex: 1;\n    overflow-y: auto;\n    overflow-x: hidden;\n  }\n  .table-scroll::-webkit-scrollbar {\n    width: 5px;\n  }\n  .table-scroll::-webkit-scrollbar-track {\n    background: var(--bg-audit);\n  }\n  .table-scroll::-webkit-scrollbar-thumb {\n    background: var(--ink);\n  }\n\n  table.voucher-table {\n    width: 100%;\n    border-collapse: collapse;\n    font-size: 11px;\n  }\n  table.voucher-table th {\n    position: sticky;\n    top: 0;\n    background: var(--bg-audit);\n    color: var(--ink);\n    font-size: 10px;\n    font-weight: 800;\n    text-align: left;\n    padding: 4px 8px;\n    border-bottom: 1px solid var(--ink);\n    z-index: 1;\n    white-space: nowrap;\n  }\n  table.voucher-table td {\n    padding: 5px 8px;\n    border-bottom: 1px dotted #C8C2B8;\n    font-weight: 600;\n    cursor: pointer;\n  }\n  table.voucher-table tr:hover td {\n    background: #F6F2EB;\n  }\n  table.voucher-table tr.selected td {\n    background: var(--crimson);\n    color: #FFFFFF;\n    font-weight: 700;\n    border-bottom-color: var(--crimson);\n  }\n  .empty-hint {\n    padding: 24px 10px;\n    text-align: center;\n    font-size: 11px;\n    color: var(--muted);\n  }\n\n  /* Buttons (strictly single-line no-wrap) */\n  .action-row {\n    display: flex;\n    gap: 6px;\n    align-items: center;\n  }\n\n  .btn-voucher {\n    border: 1.5px solid var(--ink);\n    background: var(--bg-card);\n    color: var(--ink);\n    padding: 6px 10px;\n    font-size: 11px;\n    font-weight: 800;\n    cursor: pointer;\n    transition: all 0.1s ease;\n    font-family: var(--font-sans);\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    gap: 4px;\n    white-space: nowrap;\n    flex-shrink: 0;\n  }\n  .btn-voucher:hover:not(:disabled) {\n    background: var(--ink);\n    color: var(--bg-ivory);\n  }\n  .btn-voucher:disabled {\n    opacity: 0.45;\n    cursor: not-allowed;\n  }\n\n  .btn-voucher.crimson {\n    background: var(--crimson);\n    color: #FFFFFF;\n    box-shadow: 2px 2px 0px var(--ink);\n  }\n  .btn-voucher.crimson:hover:not(:disabled) {\n    background: var(--crimson-hover);\n  }\n\n  .btn-voucher.ink {\n    background: var(--ink);\n    color: var(--bg-ivory);\n  }\n  .btn-voucher.ink:hover:not(:disabled) {\n    background: var(--crimson);\n    color: #FFFFFF;\n  }\n\n  .btn-voucher.flex-1 {\n    flex: 1;\n  }\n\n  /* Inputs */\n  .field-row {\n    display: flex;\n    gap: 6px;\n    align-items: center;\n  }\n  .voucher-input, .voucher-select {\n    flex: 1;\n    height: 28px;\n    border: 1.5px solid var(--ink);\n    background: var(--bg-ivory);\n    color: var(--ink);\n    padding: 0 8px;\n    font-size: 11px;\n    font-family: var(--font-mono);\n    font-weight: 600;\n    outline: none;\n    min-width: 0;\n  }\n  .voucher-input:focus, .voucher-select:focus {\n    background: #FFFFFF;\n    border-color: var(--crimson);\n  }\n\n  /* =========================================================\n     BOTTOM TELEMETRY & STATUS SECTION (置于主体之下)\n     ========================================================= */\n  .bn-bottom {\n    border-top: 2px solid var(--ink);\n    background: var(--bg-audit);\n    padding: 6px 14px 8px 14px;\n    display: flex;\n    flex-direction: column;\n    gap: 5px;\n    height: 108px;\n    flex-shrink: 0;\n  }\n\n  .bottom-meta-row {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    font-size: 11px;\n  }\n\n  .wm-status {\n    font-weight: 800;\n    color: var(--ink);\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    white-space: nowrap;\n  }\n  .wm-dot {\n    width: 7px;\n    height: 7px;\n    background: var(--crimson);\n    display: inline-block;\n  }\n\n  .spec-inline {\n    font-family: var(--font-mono);\n    font-size: 10px;\n    color: var(--muted);\n    display: flex;\n    gap: 10px;\n    white-space: nowrap;\n  }\n\n  .audit-log-box {\n    flex: 1;\n    border: 1px solid var(--ink);\n    background: #EAE5DC;\n    padding: 5px 8px;\n    font-family: var(--font-mono);\n    font-size: 10px;\n    line-height: 1.45;\n    color: #22201E;\n    overflow-y: auto;\n    white-space: pre-wrap;\n    word-break: break-all;\n    user-select: text;\n  }\n  .audit-log-box::-webkit-scrollbar {\n    width: 4px;\n  }\n  .audit-log-box::-webkit-scrollbar-thumb {\n    background: var(--ink);\n  }\n\n  /* =========================================================\n     MODAL & TOAST OVERLAYS\n     ========================================================= */\n  .modal-backdrop {\n    position: fixed;\n    inset: 0;\n    zoom: 0.89;\n    background: rgba(26, 24, 23, 0.52);\n    display: none;\n    align-items: center;\n    justify-content: center;\n    z-index: 100;\n  }\n  .modal-backdrop.active {\n    display: flex;\n  }\n  .voucher-modal {\n    width: 360px;\n    background: var(--bg-ivory);\n    border: 2px solid var(--ink);\n    box-shadow: 5px 5px 0px var(--ink);\n  }\n  .vm-hdr {\n    background: var(--crimson);\n    color: var(--bg-ivory);\n    padding: 6px 12px;\n    font-size: 11px;\n    font-weight: 700;\n    display: flex;\n    justify-content: space-between;\n    border-bottom: 1.5px solid var(--ink);\n  }\n  .vm-body {\n    padding: 14px 16px;\n  }\n  .vm-title {\n    font-size: 14px;\n    font-weight: 900;\n    margin-bottom: 6px;\n    padding-bottom: 5px;\n    border-bottom: 1px solid var(--ink);\n  }\n  .vm-msg {\n    font-size: 12px;\n    line-height: 1.55;\n    white-space: pre-line;\n    color: var(--ink);\n    margin-bottom: 14px;\n  }\n  .vm-actions {\n    display: flex;\n    gap: 8px;\n    justify-content: flex-end;\n  }\n\n  /* Toast Stamp */\n  .toast-container {\n    position: fixed;\n    right: 12px;\n    bottom: 12px;\n    zoom: 0.89;\n    z-index: 200;\n    display: flex;\n    flex-direction: column;\n    gap: 6px;\n    pointer-events: none;\n  }\n  .toast-card {\n    background: var(--bg-card);\n    border: 2px solid var(--ink);\n    box-shadow: 3px 3px 0px var(--ink);\n    min-width: 210px;\n    max-width: 310px;\n    pointer-events: auto;\n    animation: slideIn 0.14s ease-out;\n  }\n  @keyframes slideIn {\n    from { transform: translateY(10px); opacity: 0; }\n    to { transform: translateY(0); opacity: 1; }\n  }\n  .toast-bar {\n    height: 4px;\n    background: var(--crimson);\n    border-bottom: 1px solid var(--ink);\n  }\n  .toast-content {\n    padding: 8px 10px;\n  }\n  .toast-title {\n    font-size: 11px;\n    font-weight: 800;\n    margin-bottom: 2px;\n  }\n  .toast-msg {\n    font-size: 11px;\n    line-height: 1.4;\n    white-space: pre-line;\n  }\n</style>\n</head>\n<body>\n\n<div class="banknote-shell">\n  <!-- 0. CUSTOM INTEGRATED SWISS TITLEBAR (FRAMELESS DRAGGABLE) -->\n  <div class="custom-titlebar pywebview-drag-region">\n    <div class="ct-brand">\n      <span class="ct-cross">┼</span>\n      <span>JIANYING AI PRO</span>\n    </div>\n    <div class="ct-controls">\n      <button class="ct-btn" title="最小化" onclick="pyCall(\'minimize_win\')">─</button>\n      <button class="ct-btn close" title="关闭" onclick="pyCall(\'close_win\')">✕</button>\n    </div>\n  </div>\n\n  <!-- 1. TOP & CENTER MAIN WORKSPACE -->\n  <div class="bn-center">\n    <div>\n      <div class="sn-bar">\n        <span class="sn-code">v2.0</span>\n        <span id="coord-badge" class="coord-stamp">● 未录制坐标</span>\n      </div>\n      <div class="title-bar">\n        <span class="main-title">JIANYING AI PRO</span>\n      </div>\n\n      <div class="bn-tabs">\n        <button class="bn-tab active" onclick="switchTab(0)">01 · 批量导出</button>\n        <button class="bn-tab" onclick="switchTab(1)">02 · 字幕工程</button>\n        <button class="bn-tab" onclick="switchTab(2)">03 · 双擎改名</button>\n        <button class="bn-tab" onclick="switchTab(3)">04 · 凭证参数</button>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 0: 批量导出 ==================== -->\n    <div id="panel-0" class="module-panel active">\n      <div class="ledger-box grow">\n        <div class="ledger-hdr">\n          <span>首页草稿队列</span>\n          <span id="queue-count" style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">0 项</span>\n        </div>\n        <div class="table-scroll">\n          <table class="voucher-table">\n            <thead>\n              <tr>\n                <th style="width:42px;">序号</th>\n                <th>草稿名称</th>\n                <th style="width:80px;text-align:right;">状态</th>\n              </tr>\n            </thead>\n            <tbody id="queue-tbody">\n              <tr><td colspan="3" class="empty-hint">尚未扫描草稿 · 请点击下方【AI 扫描草稿】解析剪映首页</td></tr>\n            </tbody>\n          </table>\n        </div>\n      </div>\n\n      <div class="action-row">\n        <button class="btn-voucher" onclick="pyCall(\'start_wizard\')">引导录制 [F8]</button>\n        <button class="btn-voucher" onclick="pyCall(\'scan_drafts\')">AI 扫描草稿</button>\n        <button id="btn-start-export" class="btn-voucher crimson flex-1" onclick="triggerExport()">▶ 此处执行</button>\n        <button class="btn-voucher ink" onclick="pyCall(\'stop_export\')">■ 中断</button>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 1: 字幕工程 ==================== -->\n    <div id="panel-1" class="module-panel">\n      <div style="display:flex;flex-direction:column;gap:8px;flex:1;">\n        <div class="ledger-box">\n          <div class="ledger-hdr">\n            <span>剪映草稿根目录</span>\n          </div>\n          <div class="field-row">\n            <input id="inp-draft-dir" class="voucher-input" type="text" value="D:\\JianyingPro Drafts" placeholder="选择剪映草稿目录..." />\n            <button class="btn-voucher ink" onclick="pyCall(\'browse_draft_dir\')">浏览目录</button>\n          </div>\n        </div>\n\n        <div class="ledger-box" style="flex:1;justify-content:center;">\n          <div class="ledger-hdr">\n            <span>字幕提取与无损隐藏</span>\n          </div>\n          <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">\n            <button class="btn-voucher crimson" style="padding:10px;" onclick="pyCall(\'trigger_extract_subs\')">\n              ┼ 提取 SRT 字幕 & 无损隐藏轨道 → 桌面/srt\n            </button>\n            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">\n              <button class="btn-voucher ink" style="padding:9px;" onclick="pyCall(\'trigger_fix_fonts\')">\n                ■ 统一字体 (Noto Sans Bold)\n              </button>\n              <button class="btn-voucher" style="padding:9px;" onclick="pyCall(\'trigger_unhide_tracks\')">\n                □ 解除所有字幕隐藏\n              </button>\n            </div>\n          </div>\n        </div>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 2: 双擎改名 ==================== -->\n    <div id="panel-2" class="module-panel">\n      <div class="ledger-box" style="margin-bottom:8px;">\n        <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:6px;">\n          <button id="mode-regex-btn" class="btn-voucher ink" style="padding:3px 12px;font-size:11px;" onclick="setRenameMode(\'正则匹配重命名\')">正则匹配</button>\n          <button id="mode-ai-btn" class="btn-voucher" style="padding:3px 12px;font-size:11px;" onclick="setRenameMode(\'AI 智能重命名\')">AI语义</button>\n        </div>\n\n        <!-- 正则匹配控制 -->\n        <div id="rename-regex-box">\n          <div class="field-row" style="margin-bottom:6px;">\n            <span style="font-size:11px;font-weight:700;width:38px;flex-shrink:0;">目录:</span>\n            <input id="inp-ren-folder" class="voucher-input" type="text" placeholder="选择包含视频或字幕的文件夹..." />\n            <button class="btn-voucher" onclick="pyCall(\'browse_rename_folder\')">浏览</button>\n          </div>\n          <div class="field-row">\n            <span style="font-size:11px;font-weight:700;width:38px;flex-shrink:0;">模板:</span>\n            <input id="inp-ren-fmt" class="voucher-input" type="text" value="短剧名称_第1集" placeholder="例：短剧名称_第1集" />\n            <button class="btn-voucher crimson" onclick="previewRegexRename()">规则预览</button>\n          </div>\n        </div>\n\n        <!-- AI语义控制 -->\n        <div id="rename-ai-box" style="display:none;">\n          <div class="field-row" style="margin-bottom:6px;">\n            <span style="font-size:11px;font-weight:700;width:38px;flex-shrink:0;">来源:</span>\n            <button class="btn-voucher" onclick="pyCall(\'select_ai_files\')">选择文件</button>\n            <button class="btn-voucher" onclick="pyCall(\'load_folder_for_ai\')">载入文件夹</button>\n            <span id="ai-file-count" style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--crimson);margin-left:4px;white-space:nowrap;">未选择</span>\n          </div>\n          <div class="field-row">\n            <span style="font-size:11px;font-weight:700;width:38px;flex-shrink:0;">格式:</span>\n            <input id="inp-ai-fmt" class="voucher-input" type="text" value="短剧名称_第X集" placeholder="例：短剧名称_第X集" />\n            <button id="btn-ai-preview" class="btn-voucher crimson" onclick="previewAiRename()">AI 预览</button>\n          </div>\n        </div>\n      </div>\n\n      <div class="ledger-box grow">\n        <div class="ledger-hdr">\n          <span>重命名对照表</span>\n          <span id="ren-plan-count" style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">0 个文件</span>\n        </div>\n        <div class="table-scroll">\n          <table class="voucher-table">\n            <thead>\n              <tr>\n                <th>原文件名</th>\n                <th>新文件名</th>\n                <th style="width:72px;text-align:center;">方式</th>\n              </tr>\n            </thead>\n            <tbody id="ren-tbody">\n              <tr><td colspan="3" class="empty-hint">请先配置上方目录与模板，点击【预览】生成重命名列表</td></tr>\n            </tbody>\n          </table>\n        </div>\n      </div>\n\n      <div class="action-row">\n        <button id="btn-exec-rename" class="btn-voucher crimson flex-1" disabled onclick="pyCall(\'trigger_exec_rename\')">\n          ▶ 执行批量重命名\n        </button>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 3: 凭证参数 ==================== -->\n    <div id="panel-3" class="module-panel">\n      <div class="ledger-box grow" style="justify-content:space-between;">\n        <div>\n          <div class="ledger-hdr">\n            <span>密钥与模型配置</span>\n          </div>\n\n          <div style="margin-top:4px;">\n            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">\n              <div>\n                <div style="font-size:12px;font-weight:800;">Gemini API Key</div>\n                <div style="font-size:10px;color:var(--amber);margin-top:2px;">默认为公用 Key，建议填入个人独立 Key 保障稳定</div>\n              </div>\n              <button class="btn-voucher ink" onclick="pyCall(\'open_api_url\')">获取 API Key ↗</button>\n            </div>\n            <div class="field-row">\n              <input id="inp-api-key" class="voucher-input" type="password" placeholder="AIzaSy..." />\n            </div>\n          </div>\n\n          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border-line);">\n            <div style="display:flex;justify-content:space-between;align-items:center;">\n              <div>\n                <div style="font-size:12px;font-weight:800;">推理模型选择</div>\n                <div style="font-size:10px;color:var(--muted);margin-top:2px;">用于首页草稿封面识别与 AI 批量改名</div>\n              </div>\n              <select id="sel-model" class="voucher-select" style="max-width:190px;">\n                <option value="gemini-3.5-flash">gemini-3.5-flash</option>\n                <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>\n                <option value="gemini-2.5-flash">gemini-2.5-flash</option>\n                <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>\n                <option value="gemini-3-flash">gemini-3-flash</option>\n                <option value="gemini-3.7-flash">gemini-3.7-flash</option>\n                <option value="gemini-3.8-flash">gemini-3.8-flash</option>\n              </select>\n            </div>\n          </div>\n        </div>\n\n        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1.5px solid var(--ink);padding-top:8px;">\n          <span style="font-size:10px;color:var(--muted);">作者: 塔奇 · 修改: 小马</span>\n          <button class="btn-voucher crimson" onclick="saveSettings()">┼ 保存设置</button>\n        </div>\n      </div>\n    </div>\n  </div>\n\n  <!-- 2. BOTTOM TELEMETRY & STATUS SECTION (置于主体之下) -->\n  <div class="bn-bottom">\n    <div class="bottom-meta-row">\n      <div class="wm-status">\n        <span class="wm-dot"></span>\n        <span>状态：</span>\n        <span id="status-text">就绪</span>\n      </div>\n      <div class="spec-inline">\n        <span>分辨率: <strong id="spec-res">2560×1440</strong></span>\n        <span>模型: <strong id="spec-model">GEMINI-3.5</strong></span>\n      </div>\n    </div>\n    <div id="audit-log" class="audit-log-box"></div>\n  </div>\n</div>\n\n<!-- CONFIRM MODAL -->\n<div id="modal-backdrop" class="modal-backdrop">\n  <div class="voucher-modal">\n    <div class="vm-hdr">\n      <span>┼ 操作确认</span>\n      <span>v2.0</span>\n    </div>\n    <div class="vm-body">\n      <div id="modal-title" class="vm-title">确认操作</div>\n      <div id="modal-msg" class="vm-msg">内容</div>\n      <div class="vm-actions">\n        <button id="modal-cancel-btn" class="btn-voucher" onclick="resolveModal(false)">取消</button>\n        <button id="modal-ok-btn" class="btn-voucher crimson" onclick="resolveModal(true)">确认</button>\n      </div>\n    </div>\n  </div>\n</div>\n\n<!-- TOAST CONTAINER -->\n<div id="toast-container" class="toast-container"></div>\n\n<script>\n  let selectedDraftIdx = 0;\n  let currentRenameMode = \'正则匹配重命名\';\n\n  function switchTab(idx) {\n    document.querySelectorAll(\'.bn-tab\').forEach((btn, i) => btn.classList.toggle(\'active\', i === idx));\n    document.querySelectorAll(\'.module-panel\').forEach((p, i) => p.classList.toggle(\'active\', i === idx));\n  }\n\n  function pyCall(method, ...args) {\n    if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {\n      return window.pywebview.api[method](...args);\n    }\n  }\n\n  /* Called from Python on startup */\n  window.initAppState = function(state) {\n    if (state.res) document.getElementById(\'spec-res\').textContent = state.res;\n    if (state.api_key !== undefined) document.getElementById(\'inp-api-key\').value = state.api_key;\n    if (state.api_model) {\n      document.getElementById(\'sel-model\').value = state.api_model;\n      document.getElementById(\'spec-model\').textContent = state.api_model.toUpperCase();\n    }\n    if (state.draft_dir) document.getElementById(\'inp-draft-dir\').value = state.draft_dir;\n    if (state.coords_ready) {\n      updateGuideBadge(\'● 坐标已就绪\', \'ready\');\n    }\n  };\n\n  window.updateGuideBadge = function(text, mode) {\n    const el = document.getElementById(\'coord-badge\');\n    el.textContent = text;\n    el.className = \'coord-stamp\' + (mode ? \' \' + mode : \'\');\n  };\n\n  window.appendLog = function(text) {\n    const box = document.getElementById(\'audit-log\');\n    box.textContent += text;\n    box.scrollTop = box.scrollHeight;\n  };\n\n  window.setStatus = function(text) {\n    document.getElementById(\'status-text\').textContent = text;\n  };\n\n  window.setDraftDirInput = function(path) {\n    document.getElementById(\'inp-draft-dir\').value = path;\n  };\n\n  window.setRenameFolderInput = function(path) {\n    document.getElementById(\'inp-ren-folder\').value = path;\n  };\n\n  window.setAiFileCount = function(text) {\n    document.getElementById(\'ai-file-count\').textContent = text;\n  };\n\n  window.setExportBtnState = function(enabled) {\n    document.getElementById(\'btn-start-export\').disabled = !enabled;\n  };\n\n  window.renderQueue = function(items) {\n    const tbody = document.getElementById(\'queue-tbody\');\n    document.getElementById(\'queue-count\').textContent = items.length + \' 项\';\n    if (!items.length) {\n      tbody.innerHTML = \'<tr><td colspan="3" class="empty-hint">尚未扫描草稿 · 请点击下方【AI 扫描草稿】解析剪映首页</td></tr>\';\n      return;\n    }\n    selectedDraftIdx = 0;\n    tbody.innerHTML = \'\';\n    items.forEach((it, idx) => {\n      const tr = document.createElement(\'tr\');\n      if (idx === selectedDraftIdx) tr.classList.add(\'selected\');\n      tr.id = \'q-row-\' + idx;\n      tr.onclick = () => selectQueueRow(idx);\n      tr.innerHTML = `\n        <td style="font-family:var(--font-mono);">${String(idx + 1).padStart(2, \'0\')}</td>\n        <td>${escapeHtml(it.name)}</td>\n        <td id="q-st-${idx}" style="font-family:var(--font-mono);text-align:right;">${escapeHtml(it.st)}</td>\n      `;\n      tbody.appendChild(tr);\n    });\n  };\n\n  window.updateQueueItemStatus = function(idx, st) {\n    const cell = document.getElementById(\'q-st-\' + idx);\n    if (cell) cell.textContent = st;\n  };\n\n  function selectQueueRow(idx) {\n    selectedDraftIdx = idx;\n    document.querySelectorAll(\'#queue-tbody tr\').forEach((tr, i) => {\n      tr.classList.toggle(\'selected\', i === idx);\n    });\n  }\n\n  function triggerExport() {\n    pyCall(\'request_start_export\', selectedDraftIdx);\n  }\n\n  /* Subtitle inputs */\n  window.getDraftDirValue = function() {\n    return document.getElementById(\'inp-draft-dir\').value.trim();\n  };\n\n  /* Rename Engine */\n  window.setRenameMode = function(mode) {\n    currentRenameMode = mode;\n    const isRegex = (mode === \'正则匹配重命名\');\n    document.getElementById(\'rename-regex-box\').style.display = isRegex ? \'block\' : \'none\';\n    document.getElementById(\'rename-ai-box\').style.display = isRegex ? \'none\' : \'block\';\n    document.getElementById(\'mode-regex-btn\').className = isRegex ? \'btn-voucher ink\' : \'btn-voucher\';\n    document.getElementById(\'mode-ai-btn\').className = !isRegex ? \'btn-voucher ink\' : \'btn-voucher\';\n    pyCall(\'on_rename_mode_change\', mode);\n  };\n\n  function previewRegexRename() {\n    const folder = document.getElementById(\'inp-ren-folder\').value.trim();\n    const tpl = document.getElementById(\'inp-ren-fmt\').value.trim();\n    pyCall(\'regex_preview\', folder, tpl);\n  }\n\n  function previewAiRename() {\n    const folder = document.getElementById(\'inp-ren-folder\').value.trim();\n    const fmt = document.getElementById(\'inp-ai-fmt\').value.trim();\n    pyCall(\'ai_preview\', folder, fmt);\n  }\n\n  window.setAiPreviewBusy = function(busy) {\n    const btn = document.getElementById(\'btn-ai-preview\');\n    btn.disabled = busy;\n    btn.textContent = busy ? \'⏳ 思考中...\' : \'AI 预览\';\n  };\n\n  window.renderRenamePlan = function(plan) {\n    const tbody = document.getElementById(\'ren-tbody\');\n    document.getElementById(\'ren-plan-count\').textContent = plan.length + \' 个文件\';\n    document.getElementById(\'btn-exec-rename\').disabled = (plan.length === 0);\n    if (!plan.length) {\n      tbody.innerHTML = \'<tr><td colspan="3" class="empty-hint">没有可预览的重命名计划</td></tr>\';\n      return;\n    }\n    tbody.innerHTML = \'\';\n    plan.forEach(item => {\n      const tr = document.createElement(\'tr\');\n      tr.innerHTML = `\n        <td>${escapeHtml(item.old_name)}</td>\n        <td style="color:var(--crimson);font-weight:700;">${escapeHtml(item.new_name)}</td>\n        <td style="font-family:var(--font-mono);font-size:10px;text-align:center;">${escapeHtml(item.mode)}</td>\n      `;\n      tbody.appendChild(tr);\n    });\n  };\n\n  function saveSettings() {\n    const key = document.getElementById(\'inp-api-key\').value.trim();\n    const model = document.getElementById(\'sel-model\').value;\n    document.getElementById(\'spec-model\').textContent = model.toUpperCase();\n    pyCall(\'save_settings\', key, model);\n  }\n\n  /* Modal & Toast */\n  window.showVoucherModal = function(title, message, showCancel) {\n    document.getElementById(\'modal-title\').textContent = title;\n    document.getElementById(\'modal-msg\').textContent = message;\n    document.getElementById(\'modal-cancel-btn\').style.display = showCancel ? \'inline-flex\' : \'none\';\n    document.getElementById(\'modal-ok-btn\').textContent = showCancel ? \'确认\' : \'我已知晓\';\n    document.getElementById(\'modal-backdrop\').classList.add(\'active\');\n  };\n\n  function resolveModal(confirmed) {\n    document.getElementById(\'modal-backdrop\').classList.remove(\'active\');\n    pyCall(\'on_modal_result\', confirmed);\n  }\n\n  window.showToast = function(title, message, color, duration) {\n    const container = document.getElementById(\'toast-container\');\n    const card = document.createElement(\'div\');\n    card.className = \'toast-card\';\n    card.innerHTML = `\n      <div class="toast-bar" style="background:${color || \'#9E1B16\'};"></div>\n      <div class="toast-content">\n        <div class="toast-title" style="color:${color || \'#9E1B16\'};">┼ ${escapeHtml(title)}</div>\n        <div class="toast-msg">${escapeHtml(message)}</div>\n      </div>\n    `;\n    container.appendChild(card);\n    setTimeout(() => {\n      card.remove();\n    }, duration || 4000);\n  };\n\n  function escapeHtml(str) {\n    return String(str || \'\')\n      .replace(/&/g, \'&amp;\')\n      .replace(/</g, \'&lt;\')\n      .replace(/>/g, \'&gt;\')\n      .replace(/"/g, \'&quot;\');\n  }\n\n  window.addEventListener(\'pywebviewready\', function() {\n    pyCall(\'ui_ready\');\n  });\n</script>\n</body>\n</html>'
+BANKNOTE_HTML = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>JIANYING AI PRO v2.0.1</title>\n<style>\n  :root {\n    --bg-ivory: #FBF9F5;\n    --bg-audit: #F2EFE9;\n    --bg-card: #FFFFFF;\n    --crimson: #9E1B16;\n    --crimson-hover: #7D1410;\n    --ink: #1A1817;\n    --muted: #6E6A63;\n    --border-line: #D6D1C7;\n    --emerald: #0B6E4F;\n    --amber: #B45309;\n    --danger: #B91C1C;\n    --font-sans: \'Inter\', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;\n    --font-mono: \'JetBrains Mono\', \'Consolas\', \'SFMono-Regular\', monospace;\n  }\n\n  * {\n    box-sizing: border-box;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, body {\n    width: 100%;\n    height: 100%;\n    overflow: hidden;\n    font-family: var(--font-sans);\n    color: var(--ink);\n    background-color: var(--bg-ivory);\n    background-image:\n      repeating-linear-gradient(\n        0deg,\n        transparent,\n        transparent 3px,\n        rgba(158, 27, 22, 0.035) 3px,\n        rgba(158, 27, 22, 0.035) 4px\n      ),\n      repeating-linear-gradient(\n        90deg,\n        transparent,\n        transparent 23px,\n        rgba(26, 24, 23, 0.02) 23px,\n        rgba(26, 24, 23, 0.02) 24px\n      );\n    user-select: none;\n    -webkit-font-smoothing: antialiased;\n  }\n\n  /* 单栏上下布局：上为主体工作区，下为日志与状态区 */\n  .banknote-shell {\n    width: 112.36vw;\n    height: 112.36vh;\n    zoom: 0.89;\n    border: 2px solid var(--ink);\n    display: flex;\n    flex-direction: column;\n    position: relative;\n    overflow: hidden;\n  }\n\n  /* 窗口边缘与四角自由缩放热区 */\n  .rz-edge {\n    position: fixed;\n    z-index: 900;\n  }\n  .rz-n  { top: 0; left: 8px; right: 8px; height: 5px; cursor: ns-resize; }\n  .rz-s  { bottom: 0; left: 8px; right: 14px; height: 6px; cursor: ns-resize; }\n  .rz-w  { left: 0; top: 8px; bottom: 8px; width: 5px; cursor: ew-resize; }\n  .rz-e  { right: 0; top: 30px; bottom: 14px; width: 6px; cursor: ew-resize; }\n  .rz-nw { top: 0; left: 0; width: 8px; height: 8px; cursor: nwse-resize; }\n  .rz-ne { top: 0; right: 0; width: 8px; height: 8px; cursor: nesw-resize; }\n  .rz-sw { bottom: 0; left: 0; width: 10px; height: 10px; cursor: nesw-resize; }\n  .rz-se {\n    bottom: 0;\n    right: 0;\n    width: 16px;\n    height: 16px;\n    cursor: nwse-resize;\n    display: flex;\n    align-items: flex-end;\n    justify-content: flex-end;\n    padding: 1px 2px;\n    font-size: 9px;\n    line-height: 1;\n    color: var(--muted);\n    opacity: 0.7;\n  }\n  .rz-se:hover {\n    color: var(--crimson);\n    opacity: 1;\n  }\n\n  /* 一体化可拖拽自定义瑞士顶栏（仅保留此黑色标题栏） */\n  .custom-titlebar {\n    height: 30px;\n    background: var(--ink);\n    color: var(--bg-ivory);\n    border-bottom: 1.5px solid var(--ink);\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    padding: 0 0 0 12px;\n    flex-shrink: 0;\n    cursor: move;\n  }\n  .ct-brand {\n    display: flex;\n    align-items: center;\n    gap: 8px;\n    font-family: var(--font-mono);\n    font-size: 11px;\n    font-weight: 800;\n    letter-spacing: 0.06em;\n  }\n  .ct-cross {\n    background: var(--crimson);\n    color: #FFFFFF;\n    width: 16px;\n    height: 16px;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    font-size: 11px;\n    font-weight: 900;\n  }\n  .ct-controls {\n    display: flex;\n    height: 100%;\n  }\n  .ct-btn {\n    width: 34px;\n    height: 100%;\n    border: none;\n    border-left: 1px solid #33302E;\n    background: transparent;\n    color: var(--bg-ivory);\n    font-family: var(--font-mono);\n    font-size: 12px;\n    font-weight: 700;\n    cursor: pointer;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    transition: background 0.1s;\n  }\n  .ct-btn:hover {\n    background: #33302E;\n  }\n  .ct-btn.close:hover {\n    background: var(--crimson);\n    color: #FFFFFF;\n  }\n\n  /* =========================================================\n     TOP & MAIN WORKSPACE\n     ========================================================= */\n  .bn-center {\n    padding: 8px 12px 6px 12px;\n    display: flex;\n    flex-direction: column;\n    flex: 1;\n    min-height: 0;\n    overflow: hidden;\n  }\n\n  /* Top Bar: 4-Tab Navigation + Compact Right Coordinate Badge */\n  .top-nav-row {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    margin-bottom: 6px;\n    flex-shrink: 0;\n  }\n\n  .bn-tabs {\n    flex: 1;\n    display: grid;\n    grid-template-columns: repeat(4, 1fr);\n    border: 1.5px solid var(--ink);\n    background: var(--ink);\n    gap: 1px;\n  }\n\n  .bn-tab {\n    background: var(--bg-card);\n    color: var(--ink);\n    padding: 5px 4px;\n    font-size: 11px;\n    font-weight: 800;\n    text-align: center;\n    cursor: pointer;\n    transition: all 0.1s ease;\n    font-family: var(--font-sans);\n    border: none;\n    outline: none;\n    white-space: nowrap;\n  }\n  .bn-tab:hover {\n    background: var(--bg-audit);\n  }\n  .bn-tab.active {\n    background: var(--ink);\n    color: var(--bg-ivory);\n  }\n\n  /* 紧凑型右侧坐标状态徽章 */\n  .coord-stamp {\n    font-family: var(--font-mono);\n    font-size: 10px;\n    font-weight: 700;\n    padding: 0 7px;\n    height: 27px;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    background: var(--crimson);\n    color: #FFFFFF;\n    border: 1.5px solid var(--ink);\n    white-space: nowrap;\n    flex-shrink: 0;\n  }\n  .coord-stamp.ready {\n    background: var(--emerald);\n  }\n  .coord-stamp.recording {\n    background: var(--amber);\n  }\n\n  /* Module Stage Panels */\n  .module-panel {\n    display: none;\n    flex: 1;\n    min-height: 0;\n    flex-direction: column;\n    gap: 6px;\n    overflow: hidden;\n  }\n  .module-panel.active {\n    display: flex;\n  }\n\n  /* Export Mode Selector Bar */\n  .mode-bar {\n    border: 1.5px solid var(--ink);\n    background: var(--bg-card);\n    padding: 5px 8px;\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    gap: 6px;\n    flex-shrink: 0;\n    box-shadow: 2px 2px 0px rgba(26, 24, 23, 0.05);\n  }\n  .mode-bar-left {\n    display: flex;\n    align-items: center;\n    gap: 5px;\n    flex: 1;\n    min-width: 0;\n  }\n  .mode-label {\n    font-size: 10.5px;\n    font-weight: 800;\n    color: var(--ink);\n    white-space: nowrap;\n    flex-shrink: 0;\n  }\n  .mode-btn {\n    border: 1.5px solid var(--ink);\n    background: var(--bg-ivory);\n    color: var(--ink);\n    padding: 4px 8px;\n    font-size: 10.5px;\n    font-weight: 800;\n    cursor: pointer;\n    font-family: var(--font-sans);\n    white-space: nowrap;\n    transition: all 0.1s ease;\n    flex: 1;\n    text-align: center;\n  }\n  .mode-btn:hover {\n    background: var(--bg-audit);\n  }\n  .mode-btn.active {\n    background: var(--crimson);\n    color: #FFFFFF;\n    box-shadow: 1.5px 1.5px 0px var(--ink);\n  }\n\n  /* Swiss Ledger Box */\n  .ledger-box {\n    border: 1.5px solid var(--ink);\n    background: var(--bg-card);\n    padding: 7px 10px;\n    display: flex;\n    flex-direction: column;\n    box-shadow: 2px 2px 0px rgba(26, 24, 23, 0.06);\n    flex-shrink: 0;\n  }\n  .ledger-box.grow {\n    flex: 1;\n    min-height: 95px;\n    overflow: hidden;\n    flex-shrink: 1;\n  }\n\n  .ledger-hdr {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    font-size: 11px;\n    font-weight: 800;\n    color: var(--ink);\n    border-bottom: 1.5px solid var(--ink);\n    padding-bottom: 4px;\n    margin-bottom: 5px;\n    flex-shrink: 0;\n  }\n\n  /* Table Container */\n  .table-scroll {\n    flex: 1;\n    min-height: 60px;\n    overflow-y: auto;\n    overflow-x: hidden;\n  }\n  .table-scroll::-webkit-scrollbar {\n    width: 5px;\n  }\n  .table-scroll::-webkit-scrollbar-track {\n    background: var(--bg-audit);\n  }\n  .table-scroll::-webkit-scrollbar-thumb {\n    background: var(--ink);\n  }\n\n  table.voucher-table {\n    width: 100%;\n    border-collapse: collapse;\n    font-size: 11px;\n  }\n  table.voucher-table th {\n    position: sticky;\n    top: 0;\n    background: var(--bg-audit);\n    color: var(--ink);\n    font-size: 10px;\n    font-weight: 800;\n    text-align: left;\n    padding: 4px 8px;\n    border-bottom: 1px solid var(--ink);\n    z-index: 1;\n    white-space: nowrap;\n  }\n  table.voucher-table td {\n    padding: 5px 8px;\n    border-bottom: 1px dotted #C8C2B8;\n    font-weight: 600;\n    cursor: pointer;\n  }\n  table.voucher-table tr:hover td {\n    background: #F6F2EB;\n  }\n  table.voucher-table tr.selected td {\n    background: var(--crimson);\n    color: #FFFFFF;\n    font-weight: 700;\n    border-bottom-color: var(--crimson);\n  }\n  .empty-hint {\n    padding: 16px 10px !important;\n    text-align: center;\n    font-size: 11px;\n    line-height: 1.45;\n    color: var(--muted);\n  }\n\n  /* Buttons (strictly single-line no-wrap) */\n  .action-row {\n    display: flex;\n    gap: 6px;\n    align-items: center;\n    flex-shrink: 0;\n  }\n\n  .btn-voucher {\n    border: 1.5px solid var(--ink);\n    background: var(--bg-card);\n    color: var(--ink);\n    padding: 5px 9px;\n    font-size: 11px;\n    font-weight: 800;\n    cursor: pointer;\n    transition: all 0.1s ease;\n    font-family: var(--font-sans);\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    gap: 4px;\n    white-space: nowrap;\n    flex-shrink: 0;\n  }\n  .btn-voucher:hover:not(:disabled) {\n    background: var(--ink);\n    color: var(--bg-ivory);\n  }\n  .btn-voucher:disabled {\n    opacity: 0.45;\n    cursor: not-allowed;\n  }\n\n  .btn-voucher.crimson {\n    background: var(--crimson);\n    color: #FFFFFF;\n    box-shadow: 2px 2px 0px var(--ink);\n  }\n  .btn-voucher.crimson:hover:not(:disabled) {\n    background: var(--crimson-hover);\n  }\n\n  .btn-voucher.ink {\n    background: var(--ink);\n    color: var(--bg-ivory);\n  }\n  .btn-voucher.ink:hover:not(:disabled) {\n    background: var(--crimson);\n    color: #FFFFFF;\n  }\n\n  .btn-voucher.flex-1 {\n    flex: 1;\n  }\n\n  /* Inputs */\n  .field-row {\n    display: flex;\n    gap: 6px;\n    align-items: center;\n  }\n  .voucher-input, .voucher-select {\n    flex: 1;\n    height: 26px;\n    border: 1.5px solid var(--ink);\n    background: var(--bg-ivory);\n    color: var(--ink);\n    padding: 0 8px;\n    font-size: 11px;\n    font-family: var(--font-mono);\n    font-weight: 600;\n    outline: none;\n    min-width: 0;\n  }\n  .voucher-input:focus, .voucher-select:focus {\n    background: #FFFFFF;\n    border-color: var(--crimson);\n  }\n\n  /* =========================================================\n     BOTTOM TELEMETRY & STATUS SECTION\n     ========================================================= */\n  .bn-bottom {\n    border-top: 2px solid var(--ink);\n    background: var(--bg-audit);\n    padding: 5px 12px 6px 12px;\n    display: flex;\n    flex-direction: column;\n    gap: 4px;\n    height: clamp(84px, 19vh, 165px);\n    flex-shrink: 0;\n  }\n\n  .bottom-meta-row {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    font-size: 11px;\n  }\n\n  .wm-status {\n    font-weight: 800;\n    color: var(--ink);\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    white-space: nowrap;\n  }\n  .wm-dot {\n    width: 7px;\n    height: 7px;\n    background: var(--crimson);\n    display: inline-block;\n  }\n\n  .spec-inline {\n    font-family: var(--font-mono);\n    font-size: 10px;\n    color: var(--muted);\n    display: flex;\n    gap: 10px;\n    white-space: nowrap;\n  }\n\n  .audit-log-box {\n    flex: 1;\n    border: 1px solid var(--ink);\n    background: #EAE5DC;\n    padding: 4px 8px;\n    font-family: var(--font-mono);\n    font-size: 10px;\n    line-height: 1.42;\n    color: #22201E;\n    overflow-y: auto;\n    white-space: pre-wrap;\n    word-break: break-all;\n    user-select: text;\n  }\n  .audit-log-box::-webkit-scrollbar {\n    width: 4px;\n  }\n  .audit-log-box::-webkit-scrollbar-thumb {\n    background: var(--ink);\n  }\n\n  /* =========================================================\n     MODAL & TOAST OVERLAYS\n     ========================================================= */\n  .modal-backdrop {\n    position: fixed;\n    inset: 0;\n    zoom: 0.89;\n    background: rgba(26, 24, 23, 0.58);\n    display: none;\n    align-items: center;\n    justify-content: center;\n    z-index: 500;\n  }\n  .modal-backdrop.active {\n    display: flex;\n  }\n  .voucher-modal {\n    width: 390px;\n    max-width: 92vw;\n    background: var(--bg-ivory);\n    border: 2px solid var(--ink);\n    box-shadow: 6px 6px 0px var(--ink);\n  }\n  .vm-hdr {\n    background: var(--crimson);\n    color: var(--bg-ivory);\n    padding: 6px 12px;\n    font-size: 11px;\n    font-weight: 700;\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    border-bottom: 1.5px solid var(--ink);\n  }\n  .vm-body {\n    padding: 14px 16px;\n  }\n  .vm-title {\n    font-size: 14px;\n    font-weight: 900;\n    margin-bottom: 6px;\n    padding-bottom: 5px;\n    border-bottom: 1px solid var(--ink);\n  }\n  .vm-msg {\n    font-size: 12px;\n    line-height: 1.55;\n    white-space: pre-line;\n    color: var(--ink);\n    margin-bottom: 14px;\n  }\n  .vm-actions {\n    display: flex;\n    gap: 8px;\n    justify-content: flex-end;\n  }\n\n  /* 醒目居中录制坐标弹窗专属样式 */\n  .wizard-steps-bar {\n    display: flex;\n    gap: 4px;\n    margin-bottom: 10px;\n  }\n  .wiz-step-pill {\n    flex: 1;\n    padding: 4px 4px;\n    font-size: 10px;\n    font-weight: 800;\n    text-align: center;\n    border: 1.5px solid var(--ink);\n    background: var(--bg-audit);\n    color: var(--muted);\n    white-space: nowrap;\n  }\n  .wiz-step-pill.done {\n    background: var(--emerald);\n    color: #FFFFFF;\n  }\n  .wiz-step-pill.current {\n    background: var(--amber);\n    color: #FFFFFF;\n    box-shadow: 2px 2px 0px var(--ink);\n  }\n  .wiz-highlight-box {\n    border: 2px solid var(--ink);\n    background: #FFFFFF;\n    padding: 12px;\n    text-align: center;\n    margin-bottom: 10px;\n    box-shadow: 3px 3px 0px rgba(158, 27, 22, 0.15);\n  }\n  .wiz-step-title {\n    font-size: 15px;\n    font-weight: 900;\n    color: var(--crimson);\n    margin-bottom: 6px;\n  }\n  .wiz-step-desc {\n    font-size: 12px;\n    font-weight: 700;\n    line-height: 1.5;\n    color: var(--ink);\n    margin-bottom: 10px;\n  }\n  .wiz-hotkey-banner {\n    display: inline-block;\n    background: var(--ink);\n    color: var(--bg-ivory);\n    font-family: var(--font-mono);\n    font-size: 12px;\n    font-weight: 800;\n    padding: 5px 14px;\n    border: 1.5px solid var(--crimson);\n    letter-spacing: 0.04em;\n  }\n\n  /* 步骤等待时间设置表单 */\n  .wait-grid {\n    display: flex;\n    flex-direction: column;\n    gap: 7px;\n    margin-bottom: 12px;\n  }\n  .wait-row {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    padding: 5px 8px;\n    background: var(--bg-card);\n    border: 1px solid var(--ink);\n  }\n  .wait-row-lbl {\n    font-size: 11px;\n    font-weight: 800;\n    color: var(--ink);\n  }\n  .wait-row-sub {\n    font-size: 9.5px;\n    color: var(--muted);\n    margin-top: 1px;\n  }\n  .wait-inp-wrap {\n    display: flex;\n    align-items: center;\n    gap: 4px;\n  }\n  .wait-input {\n    width: 64px;\n    height: 25px;\n    border: 1.5px solid var(--ink);\n    background: var(--bg-ivory);\n    color: var(--crimson);\n    font-family: var(--font-mono);\n    font-size: 11px;\n    font-weight: 800;\n    text-align: center;\n    outline: none;\n  }\n  .wait-input:focus {\n    background: #FFFFFF;\n    border-color: var(--crimson);\n  }\n\n  /* Toast Stamp */\n  .toast-container {\n    position: fixed;\n    right: 12px;\n    bottom: 12px;\n    zoom: 0.89;\n    z-index: 600;\n    display: flex;\n    flex-direction: column;\n    gap: 6px;\n    pointer-events: none;\n  }\n  .toast-card {\n    background: var(--bg-card);\n    border: 2px solid var(--ink);\n    box-shadow: 3px 3px 0px var(--ink);\n    min-width: 210px;\n    max-width: 310px;\n    pointer-events: auto;\n    animation: slideIn 0.14s ease-out;\n  }\n  @keyframes slideIn {\n    from { transform: translateY(10px); opacity: 0; }\n    to { transform: translateY(0); opacity: 1; }\n  }\n  .toast-bar {\n    height: 4px;\n    background: var(--crimson);\n    border-bottom: 1px solid var(--ink);\n  }\n  .toast-content {\n    padding: 8px 10px;\n  }\n  .toast-title {\n    font-size: 11px;\n    font-weight: 800;\n    margin-bottom: 2px;\n  }\n  .toast-msg {\n    font-size: 11px;\n    line-height: 1.4;\n    white-space: pre-line;\n  }\n</style>\n</head>\n<body>\n\n<!-- 八向自由缩放热区 -->\n<div class="rz-edge rz-n"  onmousedown="startResize(\'n\', event)"></div>\n<div class="rz-edge rz-s"  onmousedown="startResize(\'s\', event)"></div>\n<div class="rz-edge rz-w"  onmousedown="startResize(\'w\', event)"></div>\n<div class="rz-edge rz-e"  onmousedown="startResize(\'e\', event)"></div>\n<div class="rz-edge rz-nw" onmousedown="startResize(\'nw\', event)"></div>\n<div class="rz-edge rz-ne" onmousedown="startResize(\'ne\', event)"></div>\n<div class="rz-edge rz-sw" onmousedown="startResize(\'sw\', event)"></div>\n<div class="rz-edge rz-se" onmousedown="startResize(\'se\', event)" title="拖拽自由缩放窗口">◢</div>\n\n<div class="banknote-shell">\n  <!-- 0. 顶部仅保留黑色标题栏 -->\n  <div class="custom-titlebar pywebview-drag-region" ondblclick="pyCall(\'toggle_maximize_win\')">\n    <div class="ct-brand">\n      <span class="ct-cross">┼</span>\n      <span>JIANYING AI PRO</span>\n    </div>\n    <div class="ct-controls">\n      <button class="ct-btn" title="最小化" onclick="pyCall(\'minimize_win\')">─</button>\n      <button class="ct-btn" title="最大化 / 还原" onclick="pyCall(\'toggle_maximize_win\')">□</button>\n      <button class="ct-btn close" title="关闭" onclick="pyCall(\'close_win\')">✕</button>\n    </div>\n  </div>\n\n  <!-- 1. TOP & CENTER MAIN WORKSPACE -->\n  <div class="bn-center">\n    <div class="top-nav-row">\n      <div class="bn-tabs">\n        <button class="bn-tab active" onclick="switchTab(0)">01 · 批量导出</button>\n        <button class="bn-tab" onclick="switchTab(1)">02 · 字幕工程</button>\n        <button class="bn-tab" onclick="switchTab(2)">03 · 双擎改名</button>\n        <button class="bn-tab" onclick="switchTab(3)">04 · 凭证参数</button>\n      </div>\n      <span id="coord-badge" class="coord-stamp">● 请先选模式</span>\n    </div>\n\n    <!-- ==================== TAB 0: 批量导出 ==================== -->\n    <div id="panel-0" class="module-panel active">\n      <!-- 模式选择与步骤等待时间入口 -->\n      <div class="mode-bar">\n        <div class="mode-bar-left">\n          <span class="mode-label">模式:</span>\n          <button id="mode-btn-return-home" class="mode-btn" onclick="selectExportMode(\'return_home\')">\n            收起至首页模式 (3步)\n          </button>\n          <button id="mode-btn-wait-close" class="mode-btn" onclick="selectExportMode(\'wait_close\')">\n            等待完成关闭模式 (4步)\n          </button>\n        </div>\n        <button class="btn-voucher ink" style="padding:4px 8px;font-size:10.5px;" onclick="openWaitModal(false)">\n          ⏱ 步骤等待\n        </button>\n      </div>\n\n      <div class="ledger-box grow">\n        <div class="ledger-hdr">\n          <span>首页草稿队列</span>\n          <span id="queue-count" style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">0 项</span>\n        </div>\n        <div class="table-scroll">\n          <table class="voucher-table">\n            <thead>\n              <tr>\n                <th style="width:42px;">序号</th>\n                <th>草稿名称</th>\n                <th style="width:80px;text-align:right;">状态</th>\n              </tr>\n            </thead>\n            <tbody id="queue-tbody">\n              <tr><td colspan="3" class="empty-hint">尚未扫描草稿 · 请先选择上方导出模式，录制坐标后点击【AI 扫描草稿】</td></tr>\n            </tbody>\n          </table>\n        </div>\n      </div>\n\n      <div class="action-row">\n        <button class="btn-voucher" onclick="pyCall(\'start_wizard\')">引导录制 [F8]</button>\n        <button class="btn-voucher" onclick="pyCall(\'scan_drafts\')">AI 扫描草稿</button>\n        <button id="btn-start-export" class="btn-voucher crimson flex-1" onclick="triggerExport()">▶ 此处执行</button>\n        <button class="btn-voucher ink" onclick="pyCall(\'stop_export\')">■ 中断</button>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 1: 字幕工程 ==================== -->\n    <div id="panel-1" class="module-panel">\n      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;">\n        <div class="ledger-box">\n          <div class="ledger-hdr">\n            <span>剪映草稿根目录</span>\n          </div>\n          <div class="field-row">\n            <input id="inp-draft-dir" class="voucher-input" type="text" value="D:\\JianyingPro Drafts" placeholder="选择剪映草稿目录..." />\n            <button class="btn-voucher ink" onclick="pyCall(\'browse_draft_dir\')">浏览目录</button>\n          </div>\n        </div>\n\n        <div class="ledger-box" style="flex:1;justify-content:center;">\n          <div class="ledger-hdr">\n            <span>字幕提取与无损隐藏</span>\n          </div>\n          <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">\n            <button class="btn-voucher crimson" style="padding:10px;" onclick="pyCall(\'trigger_extract_subs\')">\n              ┼ 提取 SRT 字幕 & 无损隐藏轨道 → 桌面/srt\n            </button>\n            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">\n              <button class="btn-voucher ink" style="padding:9px;" onclick="pyCall(\'trigger_fix_fonts\')">\n                ■ 统一字体 (Noto Sans Bold)\n              </button>\n              <button class="btn-voucher" style="padding:9px;" onclick="pyCall(\'trigger_unhide_tracks\')">\n                □ 解除所有字幕隐藏\n              </button>\n            </div>\n          </div>\n        </div>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 2: 双擎改名 ==================== -->\n    <div id="panel-2" class="module-panel">\n      <div class="ledger-box">\n        <div class="ledger-hdr" style="margin-bottom:6px;">\n          <span>改名规则配置</span>\n          <div style="display:flex;gap:4px;">\n            <button id="mode-regex-btn" class="btn-voucher ink" style="padding:2px 9px;font-size:10.5px;" onclick="setRenameMode(\'正则匹配重命名\')">正则匹配</button>\n            <button id="mode-ai-btn" class="btn-voucher" style="padding:2px 9px;font-size:10.5px;" onclick="setRenameMode(\'AI 智能重命名\')">AI语义</button>\n          </div>\n        </div>\n\n        <!-- 正则匹配控制 -->\n        <div id="rename-regex-box">\n          <div class="field-row" style="margin-bottom:5px;">\n            <span style="font-size:11px;font-weight:700;width:36px;flex-shrink:0;">目录:</span>\n            <input id="inp-ren-folder" class="voucher-input" type="text" placeholder="选择包含视频或字幕的文件夹..." />\n            <button class="btn-voucher" onclick="pyCall(\'browse_rename_folder\')">浏览</button>\n          </div>\n          <div class="field-row">\n            <span style="font-size:11px;font-weight:700;width:36px;flex-shrink:0;">模板:</span>\n            <input id="inp-ren-fmt" class="voucher-input" type="text" value="短剧名称_第1集" placeholder="例：短剧名称_第1集" />\n            <button class="btn-voucher crimson" onclick="previewRegexRename()">规则预览</button>\n          </div>\n        </div>\n\n        <!-- AI语义控制 -->\n        <div id="rename-ai-box" style="display:none;">\n          <div class="field-row" style="margin-bottom:5px;">\n            <span style="font-size:11px;font-weight:700;width:36px;flex-shrink:0;">来源:</span>\n            <button class="btn-voucher" onclick="pyCall(\'select_ai_files\')">选择文件</button>\n            <button class="btn-voucher" onclick="pyCall(\'load_folder_for_ai\')">载入文件夹</button>\n            <span id="ai-file-count" style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--crimson);margin-left:4px;white-space:nowrap;">未选择</span>\n          </div>\n          <div class="field-row">\n            <span style="font-size:11px;font-weight:700;width:36px;flex-shrink:0;">格式:</span>\n            <input id="inp-ai-fmt" class="voucher-input" type="text" value="短剧名称_第X集" placeholder="例：短剧名称_第X集" />\n            <button id="btn-ai-preview" class="btn-voucher crimson" onclick="previewAiRename()">AI 预览</button>\n          </div>\n        </div>\n      </div>\n\n      <div class="ledger-box grow">\n        <div class="ledger-hdr">\n          <span>重命名对照表</span>\n          <span id="ren-plan-count" style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">0 个文件</span>\n        </div>\n        <div class="table-scroll">\n          <table class="voucher-table">\n            <thead>\n              <tr>\n                <th>原文件名</th>\n                <th>新文件名</th>\n                <th style="width:72px;text-align:center;">方式</th>\n              </tr>\n            </thead>\n            <tbody id="ren-tbody">\n              <tr><td colspan="3" class="empty-hint">请先配置上方目录与模板，点击【预览】生成重命名列表</td></tr>\n            </tbody>\n          </table>\n        </div>\n      </div>\n\n      <div class="action-row">\n        <button id="btn-exec-rename" class="btn-voucher crimson flex-1" disabled onclick="pyCall(\'trigger_exec_rename\')">\n          ▶ 执行批量重命名\n        </button>\n      </div>\n    </div>\n\n    <!-- ==================== TAB 3: 凭证参数 ==================== -->\n    <div id="panel-3" class="module-panel">\n      <div class="ledger-box grow" style="justify-content:space-between;">\n        <div>\n          <div class="ledger-hdr">\n            <span>密钥与模型配置</span>\n          </div>\n\n          <div style="margin-top:4px;">\n            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">\n              <div>\n                <div style="font-size:12px;font-weight:800;">Gemini API Key</div>\n                <div style="font-size:10px;color:var(--amber);margin-top:2px;">默认为公用 Key，建议填入个人独立 Key 保障稳定</div>\n              </div>\n              <button class="btn-voucher ink" onclick="pyCall(\'open_api_url\')">获取 API Key ↗</button>\n            </div>\n            <div class="field-row">\n              <input id="inp-api-key" class="voucher-input" type="password" placeholder="AIzaSy..." />\n            </div>\n          </div>\n\n          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border-line);">\n            <div style="display:flex;justify-content:space-between;align-items:center;">\n              <div>\n                <div style="font-size:12px;font-weight:800;">推理模型选择</div>\n                <div style="font-size:10px;color:var(--muted);margin-top:2px;">用于首页草稿封面识别与 AI 批量改名</div>\n              </div>\n              <select id="sel-model" class="voucher-select" style="max-width:190px;">\n                <option value="gemini-3.5-flash">gemini-3.5-flash</option>\n                <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>\n                <option value="gemini-2.5-flash">gemini-2.5-flash</option>\n                <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>\n                <option value="gemini-3-flash">gemini-3-flash</option>\n                <option value="gemini-3.7-flash">gemini-3.7-flash</option>\n                <option value="gemini-3.8-flash">gemini-3.8-flash</option>\n              </select>\n            </div>\n          </div>\n        </div>\n\n        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1.5px solid var(--ink);padding-top:8px;">\n          <span style="font-size:10px;color:var(--muted);">作者: 塔奇 · 修改: 小马</span>\n          <button class="btn-voucher crimson" onclick="saveSettings()">┼ 保存设置</button>\n        </div>\n      </div>\n    </div>\n  </div>\n\n  <!-- 2. BOTTOM TELEMETRY & STATUS SECTION -->\n  <div class="bn-bottom">\n    <div class="bottom-meta-row">\n      <div class="wm-status">\n        <span class="wm-dot"></span>\n        <span>状态：</span>\n        <span id="status-text">就绪</span>\n      </div>\n      <div class="spec-inline">\n        <span>分辨率: <strong id="spec-res">2560×1440</strong></span>\n        <span>模型: <strong id="spec-model">GEMINI-3.5</strong></span>\n      </div>\n    </div>\n    <div id="audit-log" class="audit-log-box"></div>\n  </div>\n</div>\n\n<!-- 1. 醒目居中录制向导弹窗 -->\n<div id="wizard-modal-backdrop" class="modal-backdrop">\n  <div class="voucher-modal" style="width:410px;">\n    <div class="vm-hdr" style="background:var(--amber);">\n      <span id="wiz-hdr-title">┼ 坐标录制向导</span>\n      <span id="wiz-hdr-step">STEP 1/3</span>\n    </div>\n    <div class="vm-body">\n      <div id="wiz-steps-bar" class="wizard-steps-bar"></div>\n      <div class="wiz-highlight-box">\n        <div id="wiz-step-title" class="wiz-step-title">第 1 步：录制【导出】按钮</div>\n        <div id="wiz-step-desc" class="wiz-step-desc">请将鼠标移动到剪映右上角【导出】按钮上</div>\n        <div class="wiz-hotkey-banner">按下键盘 [ F8 ] 键记录坐标</div>\n      </div>\n      <div style="display:flex;justify-content:space-between;align-items:center;">\n        <span style="font-size:10px;color:var(--muted);">提示：请勿让本窗口遮挡需要录制的剪映按钮</span>\n        <button class="btn-voucher ink" onclick="pyCall(\'cancel_wizard\')">取消录制 [ESC]</button>\n      </div>\n    </div>\n  </div>\n</div>\n\n<!-- 2. 步骤等待时间自定义弹窗（录制完成后自动弹出 / 可随时点击打开） -->\n<div id="wait-modal-backdrop" class="modal-backdrop">\n  <div class="voucher-modal" style="width:410px;">\n    <div class="vm-hdr">\n      <span id="wait-modal-hdr">⏱ 各步骤等待时间设置</span>\n      <span id="wait-modal-mode-tag">模式配置</span>\n    </div>\n    <div class="vm-body">\n      <div id="wait-modal-subtitle" style="font-size:11px;font-weight:700;color:var(--emerald);margin-bottom:8px;display:none;">\n        ✓ 坐标录制已完成！您可在下方自定义每个步骤后的等待时间：\n      </div>\n      <div class="wait-grid">\n        <div class="wait-row">\n          <div>\n            <div class="wait-row-lbl">0. 打开草稿后等待</div>\n            <div class="wait-row-sub">点击首页草稿封面后，等待进入剪辑界面的时间</div>\n          </div>\n          <div class="wait-inp-wrap">\n            <input id="wait-inp-open-draft" class="wait-input" type="number" step="0.5" min="0.5" max="60" value="8.0" />\n            <span style="font-size:10px;font-weight:700;">秒</span>\n          </div>\n        </div>\n        <div class="wait-row">\n          <div>\n            <div class="wait-row-lbl">1. 点击【导出】后等待</div>\n            <div class="wait-row-sub">点击右上角导出按钮后，等待呼出导出弹窗的时间</div>\n          </div>\n          <div class="wait-inp-wrap">\n            <input id="wait-inp-export" class="wait-input" type="number" step="0.5" min="0.5" max="60" value="3.0" />\n            <span style="font-size:10px;font-weight:700;">秒</span>\n          </div>\n        </div>\n        <div class="wait-row">\n          <div>\n            <div class="wait-row-lbl">2. 点击【确认导出】后等待</div>\n            <div class="wait-row-sub">点击确认导出后，进入完成/收起按钮检测前的等待</div>\n          </div>\n          <div class="wait-inp-wrap">\n            <input id="wait-inp-confirm" class="wait-input" type="number" step="0.5" min="0.5" max="60" value="1.0" />\n            <span style="font-size:10px;font-weight:700;">秒</span>\n          </div>\n        </div>\n        <div id="wait-row-popup-close" class="wait-row">\n          <div>\n            <div class="wait-row-lbl">3. 点击【收起至首页】后等待</div>\n            <div class="wait-row-sub">收起至首页后，开始下一个草稿前的间隔时间</div>\n          </div>\n          <div class="wait-inp-wrap">\n            <input id="wait-inp-popup-close" class="wait-input" type="number" step="0.5" min="0.5" max="60" value="1.5" />\n            <span style="font-size:10px;font-weight:700;">秒</span>\n          </div>\n        </div>\n        <div id="wait-row-close-btn" class="wait-row" style="display:none;">\n          <div>\n            <div class="wait-row-lbl">3. 点击【关闭按钮】后等待</div>\n            <div class="wait-row-sub">导出完成点击关闭按钮后，等待点击右上角关闭的时间</div>\n          </div>\n          <div class="wait-inp-wrap">\n            <input id="wait-inp-close-btn" class="wait-input" type="number" step="0.5" min="0.5" max="60" value="2.0" />\n            <span style="font-size:10px;font-weight:700;">秒</span>\n          </div>\n        </div>\n        <div id="wait-row-draft-close" class="wait-row" style="display:none;">\n          <div>\n            <div class="wait-row-lbl">4. 点击【右上角关闭】后等待</div>\n            <div class="wait-row-sub">关闭草稿返回首页后，开始下一个草稿前的间隔时间</div>\n          </div>\n          <div class="wait-inp-wrap">\n            <input id="wait-inp-draft-close" class="wait-input" type="number" step="0.5" min="0.5" max="60" value="1.5" />\n            <span style="font-size:10px;font-weight:700;">秒</span>\n          </div>\n        </div>\n      </div>\n      <div class="vm-actions">\n        <button class="btn-voucher" onclick="closeWaitModal()">关闭</button>\n        <button class="btn-voucher crimson" onclick="saveWaitSettings()">┼ 保存等待设置</button>\n      </div>\n    </div>\n  </div>\n</div>\n\n<!-- 3. CONFIRM MODAL -->\n<div id="modal-backdrop" class="modal-backdrop">\n  <div class="voucher-modal">\n    <div class="vm-hdr">\n      <span>┼ 操作确认</span>\n      <span>v2.0.1</span>\n    </div>\n    <div class="vm-body">\n      <div id="modal-title" class="vm-title">确认操作</div>\n      <div id="modal-msg" class="vm-msg">内容</div>\n      <div class="vm-actions">\n        <button id="modal-cancel-btn" class="btn-voucher" onclick="resolveModal(false)">取消</button>\n        <button id="modal-ok-btn" class="btn-voucher crimson" onclick="resolveModal(true)">确认</button>\n      </div>\n    </div>\n  </div>\n</div>\n\n<!-- TOAST CONTAINER -->\n<div id="toast-container" class="toast-container"></div>\n\n<script>\n  let selectedDraftIdx = 0;\n  let currentRenameMode = \'正则匹配重命名\';\n  let currentExportMode = \'\';\n  let currentStepWaits = {\n    open_draft: 8.0,\n    export: 3.0,\n    confirm: 1.0,\n    popup_close: 1.5,\n    close_btn: 2.0,\n    draft_close: 1.5\n  };\n\n  function switchTab(idx) {\n    document.querySelectorAll(\'.bn-tab\').forEach((btn, i) => btn.classList.toggle(\'active\', i === idx));\n    document.querySelectorAll(\'.module-panel\').forEach((p, i) => p.classList.toggle(\'active\', i === idx));\n  }\n\n  function pyCall(method, ...args) {\n    if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {\n      return window.pywebview.api[method](...args);\n    }\n  }\n\n  function startResize(dir, ev) {\n    if (ev) {\n      ev.preventDefault();\n      ev.stopPropagation();\n    }\n    pyCall(\'begin_resize\', dir);\n  }\n\n  /* Called from Python on startup */\n  window.initAppState = function(state) {\n    if (state.res) document.getElementById(\'spec-res\').textContent = state.res;\n    if (state.api_key !== undefined) document.getElementById(\'inp-api-key\').value = state.api_key;\n    if (state.api_model) {\n      document.getElementById(\'sel-model\').value = state.api_model;\n      document.getElementById(\'spec-model\').textContent = state.api_model.toUpperCase();\n    }\n    if (state.draft_dir) document.getElementById(\'inp-draft-dir\').value = state.draft_dir;\n    if (state.step_waits) {\n      currentStepWaits = Object.assign(currentStepWaits, state.step_waits);\n      syncWaitInputs();\n    }\n    if (state.export_mode) {\n      applyExportModeUI(state.export_mode);\n    }\n    if (state.badge_text) {\n      updateGuideBadge(state.badge_text, state.badge_mode || \'\');\n    }\n  };\n\n  function applyExportModeUI(mode) {\n    currentExportMode = mode || \'\';\n    document.getElementById(\'mode-btn-return-home\').classList.toggle(\'active\', currentExportMode === \'return_home\');\n    document.getElementById(\'mode-btn-wait-close\').classList.toggle(\'active\', currentExportMode === \'wait_close\');\n    const isWaitClose = (currentExportMode === \'wait_close\');\n    document.getElementById(\'wait-row-popup-close\').style.display = isWaitClose ? \'none\' : \'flex\';\n    document.getElementById(\'wait-row-close-btn\').style.display = isWaitClose ? \'flex\' : \'none\';\n    document.getElementById(\'wait-row-draft-close\').style.display = isWaitClose ? \'flex\' : \'none\';\n    document.getElementById(\'wait-modal-mode-tag\').textContent =\n      currentExportMode === \'return_home\' ? \'收起至首页模式\' :\n      (currentExportMode === \'wait_close\' ? \'等待完成关闭模式\' : \'未选择模式\');\n  }\n\n  function selectExportMode(mode) {\n    applyExportModeUI(mode);\n    pyCall(\'set_export_mode\', mode);\n  }\n\n  window.updateGuideBadge = function(text, mode) {\n    const el = document.getElementById(\'coord-badge\');\n    el.textContent = text;\n    el.className = \'coord-stamp\' + (mode ? \' \' + mode : \'\');\n  };\n\n  /* 居中录制弹窗控制 */\n  window.showWizardModal = function(data) {\n    const bd = document.getElementById(\'wizard-modal-backdrop\');\n    if (!data || !data.active) {\n      bd.classList.remove(\'active\');\n      return;\n    }\n    document.getElementById(\'wiz-hdr-title\').textContent = \'┼ 坐标录制 · \' + (data.mode_name || \'\');\n    document.getElementById(\'wiz-hdr-step\').textContent = `STEP ${data.step_num}/${data.total_steps}`;\n    document.getElementById(\'wiz-step-title\').textContent = data.title || \'\';\n    document.getElementById(\'wiz-step-desc\').textContent = data.desc || \'\';\n\n    const bar = document.getElementById(\'wiz-steps-bar\');\n    bar.innerHTML = \'\';\n    (data.steps_labels || []).forEach((lbl, idx) => {\n      const pill = document.createElement(\'div\');\n      const sIdx = idx + 1;\n      pill.className = \'wiz-step-pill\' + (sIdx < data.step_num ? \' done\' : (sIdx === data.step_num ? \' current\' : \'\'));\n      pill.textContent = (sIdx < data.step_num ? \'✓ \' : `${sIdx}. `) + lbl;\n      bar.appendChild(pill);\n    });\n    bd.classList.add(\'active\');\n  };\n\n  /* 步骤等待时间弹窗控制 */\n  function syncWaitInputs() {\n    document.getElementById(\'wait-inp-open-draft\').value = currentStepWaits.open_draft ?? 8.0;\n    document.getElementById(\'wait-inp-export\').value = currentStepWaits.export ?? 3.0;\n    document.getElementById(\'wait-inp-confirm\').value = currentStepWaits.confirm ?? 1.0;\n    document.getElementById(\'wait-inp-popup-close\').value = currentStepWaits.popup_close ?? 1.5;\n    document.getElementById(\'wait-inp-close-btn\').value = currentStepWaits.close_btn ?? 2.0;\n    document.getElementById(\'wait-inp-draft-close\').value = currentStepWaits.draft_close ?? 1.5;\n  }\n\n  window.openWaitModal = function(fromWizardComplete) {\n    syncWaitInputs();\n    applyExportModeUI(currentExportMode);\n    document.getElementById(\'wait-modal-subtitle\').style.display = fromWizardComplete ? \'block\' : \'none\';\n    document.getElementById(\'wait-modal-backdrop\').classList.add(\'active\');\n  };\n\n  function closeWaitModal() {\n    document.getElementById(\'wait-modal-backdrop\').classList.remove(\'active\');\n  }\n\n  function saveWaitSettings() {\n    const parseSec = (id, defVal) => {\n      const v = parseFloat(document.getElementById(id).value);\n      return (!isNaN(v) && v >= 0.1) ? Math.round(v * 10) / 10 : defVal;\n    };\n    currentStepWaits = {\n      open_draft: parseSec(\'wait-inp-open-draft\', 8.0),\n      export: parseSec(\'wait-inp-export\', 3.0),\n      confirm: parseSec(\'wait-inp-confirm\', 1.0),\n      popup_close: parseSec(\'wait-inp-popup-close\', 1.5),\n      close_btn: parseSec(\'wait-inp-close-btn\', 2.0),\n      draft_close: parseSec(\'wait-inp-draft-close\', 1.5)\n    };\n    syncWaitInputs();\n    closeWaitModal();\n    pyCall(\'save_step_waits\', currentStepWaits);\n  }\n\n  window.appendLog = function(text) {\n    const box = document.getElementById(\'audit-log\');\n    box.textContent += text;\n    box.scrollTop = box.scrollHeight;\n  };\n\n  window.setStatus = function(text) {\n    document.getElementById(\'status-text\').textContent = text;\n  };\n\n  window.setDraftDirInput = function(path) {\n    document.getElementById(\'inp-draft-dir\').value = path;\n  };\n\n  window.setRenameFolderInput = function(path) {\n    document.getElementById(\'inp-ren-folder\').value = path;\n  };\n\n  window.setAiFileCount = function(text) {\n    document.getElementById(\'ai-file-count\').textContent = text;\n  };\n\n  window.setExportBtnState = function(enabled) {\n    document.getElementById(\'btn-start-export\').disabled = !enabled;\n  };\n\n  window.renderQueue = function(items) {\n    const tbody = document.getElementById(\'queue-tbody\');\n    document.getElementById(\'queue-count\').textContent = items.length + \' 项\';\n    if (!items.length) {\n      tbody.innerHTML = \'<tr><td colspan="3" class="empty-hint">尚未扫描草稿 · 请点击下方【AI 扫描草稿】解析剪映首页</td></tr>\';\n      return;\n    }\n    selectedDraftIdx = 0;\n    tbody.innerHTML = \'\';\n    items.forEach((it, idx) => {\n      const tr = document.createElement(\'tr\');\n      if (idx === selectedDraftIdx) tr.classList.add(\'selected\');\n      tr.id = \'q-row-\' + idx;\n      tr.onclick = () => selectQueueRow(idx);\n      tr.innerHTML = `\n        <td style="font-family:var(--font-mono);">${String(idx + 1).padStart(2, \'0\')}</td>\n        <td>${escapeHtml(it.name)}</td>\n        <td id="q-st-${idx}" style="font-family:var(--font-mono);text-align:right;">${escapeHtml(it.st)}</td>\n      `;\n      tbody.appendChild(tr);\n    });\n  };\n\n  window.updateQueueItemStatus = function(idx, st) {\n    const cell = document.getElementById(\'q-st-\' + idx);\n    if (cell) cell.textContent = st;\n  };\n\n  function selectQueueRow(idx) {\n    selectedDraftIdx = idx;\n    document.querySelectorAll(\'#queue-tbody tr\').forEach((tr, i) => {\n      tr.classList.toggle(\'selected\', i === idx);\n    });\n  }\n\n  function triggerExport() {\n    pyCall(\'request_start_export\', selectedDraftIdx);\n  }\n\n  /* Subtitle inputs */\n  window.getDraftDirValue = function() {\n    return document.getElementById(\'inp-draft-dir\').value.trim();\n  };\n\n  /* Rename Engine */\n  window.setRenameMode = function(mode) {\n    currentRenameMode = mode;\n    const isRegex = (mode === \'正则匹配重命名\');\n    document.getElementById(\'rename-regex-box\').style.display = isRegex ? \'block\' : \'none\';\n    document.getElementById(\'rename-ai-box\').style.display = isRegex ? \'none\' : \'block\';\n    document.getElementById(\'mode-regex-btn\').className = isRegex ? \'btn-voucher ink\' : \'btn-voucher\';\n    document.getElementById(\'mode-ai-btn\').className = !isRegex ? \'btn-voucher ink\' : \'btn-voucher\';\n    pyCall(\'on_rename_mode_change\', mode);\n  };\n\n  function previewRegexRename() {\n    const folder = document.getElementById(\'inp-ren-folder\').value.trim();\n    const tpl = document.getElementById(\'inp-ren-fmt\').value.trim();\n    pyCall(\'regex_preview\', folder, tpl);\n  }\n\n  function previewAiRename() {\n    const folder = document.getElementById(\'inp-ren-folder\').value.trim();\n    const fmt = document.getElementById(\'inp-ai-fmt\').value.trim();\n    pyCall(\'ai_preview\', folder, fmt);\n  }\n\n  window.setAiPreviewBusy = function(busy) {\n    const btn = document.getElementById(\'btn-ai-preview\');\n    btn.disabled = busy;\n    btn.textContent = busy ? \'⏳ 思考中...\' : \'AI 预览\';\n  };\n\n  window.renderRenamePlan = function(plan) {\n    const tbody = document.getElementById(\'ren-tbody\');\n    document.getElementById(\'ren-plan-count\').textContent = plan.length + \' 个文件\';\n    document.getElementById(\'btn-exec-rename\').disabled = (plan.length === 0);\n    if (!plan.length) {\n      tbody.innerHTML = \'<tr><td colspan="3" class="empty-hint">请先配置上方目录与模板，点击【预览】生成重命名列表</td></tr>\';\n      return;\n    }\n    tbody.innerHTML = \'\';\n    plan.forEach(item => {\n      const tr = document.createElement(\'tr\');\n      tr.innerHTML = `\n        <td>${escapeHtml(item.old_name)}</td>\n        <td style="color:var(--crimson);font-weight:700;">${escapeHtml(item.new_name)}</td>\n        <td style="font-family:var(--font-mono);font-size:10px;text-align:center;">${escapeHtml(item.mode)}</td>\n      `;\n      tbody.appendChild(tr);\n    });\n  };\n\n  function saveSettings() {\n    const key = document.getElementById(\'inp-api-key\').value.trim();\n    const model = document.getElementById(\'sel-model\').value;\n    document.getElementById(\'spec-model\').textContent = model.toUpperCase();\n    pyCall(\'save_settings\', key, model);\n  }\n\n  /* Modal & Toast */\n  window.showVoucherModal = function(title, message, showCancel) {\n    document.getElementById(\'modal-title\').textContent = title;\n    document.getElementById(\'modal-msg\').textContent = message;\n    document.getElementById(\'modal-cancel-btn\').style.display = showCancel ? \'inline-flex\' : \'none\';\n    document.getElementById(\'modal-ok-btn\').textContent = showCancel ? \'确认\' : \'我已知晓\';\n    document.getElementById(\'modal-backdrop\').classList.add(\'active\');\n  };\n\n  function resolveModal(confirmed) {\n    document.getElementById(\'modal-backdrop\').classList.remove(\'active\');\n    pyCall(\'on_modal_result\', confirmed);\n  }\n\n  window.showToast = function(title, message, color, duration) {\n    const container = document.getElementById(\'toast-container\');\n    const card = document.createElement(\'div\');\n    card.className = \'toast-card\';\n    card.innerHTML = `\n      <div class="toast-bar" style="background:${color || \'#9E1B16\'};"></div>\n      <div class="toast-content">\n        <div class="toast-title" style="color:${color || \'#9E1B16\'};">┼ ${escapeHtml(title)}</div>\n        <div class="toast-msg">${escapeHtml(message)}</div>\n      </div>\n    `;\n    container.appendChild(card);\n    setTimeout(() => {\n      card.remove();\n    }, duration || 4000);\n  };\n\n  function escapeHtml(str) {\n    return String(str || \'\')\n      .replace(/&/g, \'&amp;\')\n      .replace(/</g, \'&lt;\')\n      .replace(/>/g, \'&gt;\')\n      .replace(/"/g, \'&quot;\');\n  }\n\n  window.addEventListener(\'pywebviewready\', function() {\n    pyCall(\'ui_ready\');\n  });\n</script>\n</body>\n</html>'
 
 # ─── 主应用 (PyWebView / Windows Edge WebView2 瑞士防伪账本架构) ────────
 class _TkProxyWidget:
-    """兼容原有代码中对 self.status / self.start_btn / self.guide_lbl 等控件的调用"""
+    '''兼容原有代码中对 self.status / self.start_btn / self.guide_lbl 等控件的调用'''
     def __init__(self, app, role):
         self._app = app
         self._role = role
@@ -338,7 +338,7 @@ class _TkProxyWidget:
             self._app._js("setExportBtnState", kwargs["state"] == "normal")
         elif self._role == "guide_lbl" and "text" in kwargs:
             txt = kwargs["text"]
-            mode = "ready" if "就绪" in txt or "VERIFIED" in txt else ("recording" if "/" in txt else "")
+            mode = "ready" if "就绪" in txt or "VERIFIED" in txt else ("recording" if "/" in txt or "录制中" in txt else "")
             self._app._js("updateGuideBadge", txt, mode)
         elif self._role == "file_lbl" and "text" in kwargs:
             self._app._js("setAiFileCount", kwargs["text"])
@@ -348,7 +348,7 @@ class _TkProxyWidget:
 
 
 class _JsBridgeApi:
-    """专供 pywebview 暴露给前端 JS 的轻量桥接类（不包含 window 引用以避免递归内省）"""
+    '''专供 pywebview 暴露给前端 JS 的轻量桥接类（不包含 window 引用以避免递归内省）'''
     def __init__(self, app):
         self._app = app
 
@@ -358,8 +358,17 @@ class _JsBridgeApi:
     def on_modal_result(self, confirmed):
         return self._app.on_modal_result(confirmed)
 
+    def set_export_mode(self, mode):
+        return self._app.set_export_mode(mode)
+
     def start_wizard(self):
         return self._app.start_wizard()
+
+    def cancel_wizard(self):
+        return self._app.cancel_wizard()
+
+    def save_step_waits(self, waits):
+        return self._app.save_step_waits(waits)
 
     def scan_drafts(self):
         return self._app.scan_drafts()
@@ -406,20 +415,17 @@ class _JsBridgeApi:
     def open_api_url(self):
         return self._app.open_api_url()
 
-    def minimize_win(self):
-        if self.window:
-            self.window.minimize()
-
-    def close_win(self):
-        if self.window:
-            self.window.destroy()
-        os._exit(0)
-
     def save_settings(self, key, model):
         return self._app.save_settings(key, model)
 
     def minimize_win(self):
         return self._app.minimize_win()
+
+    def toggle_maximize_win(self):
+        return self._app.toggle_maximize_win()
+
+    def begin_resize(self, direction):
+        return self._app.begin_resize(direction)
 
     def close_win(self):
         return self._app.close_win()
@@ -437,6 +443,11 @@ class App:
         self.window = None
         self._ui_ready = False
         self._modal_cb = None
+        self._resizing = False
+        self._is_maximized = False
+        self._restore_rect = None
+        self._min_phys_w = 520
+        self._min_phys_h = 480
 
         # 默认推荐坐标 (基于 2560x1440)
         self.default_res = (2560, 1440)
@@ -462,6 +473,18 @@ class App:
                 "draft_close": None,
             }
             self.close_color = None
+
+        # 导出模式: "" (未选择), "return_home" (收起至首页模式), "wait_close" (等待导出完成关闭模式)
+        self.export_mode = ""
+        # 各步骤自定义等待时间(秒)
+        self.step_waits = {
+            "open_draft": 8.0,
+            "export": 3.0,
+            "confirm": 1.0,
+            "popup_close": 1.5,
+            "close_btn": 2.0,
+            "draft_close": 1.5,
+        }
 
         self.stop_flag = False
         self.rec_state = None
@@ -530,17 +553,48 @@ class App:
         def flush(self):
             pass
 
+    def _mode_label(self, mode=None):
+        m = mode if mode is not None else self.export_mode
+        if m == "return_home":
+            return "收起至首页模式"
+        if m == "wait_close":
+            return "等待导出完成关闭模式"
+        return "未选择模式"
+
+    def _is_mode_coords_ready(self, mode=None):
+        m = mode if mode is not None else self.export_mode
+        if m == "return_home":
+            return all(self.coords.get(k) for k in ("export", "confirm", "popup_close"))
+        if m == "wait_close":
+            return all(self.coords.get(k) for k in ("export", "confirm", "close_btn", "draft_close"))
+        return False
+
+    def _get_badge_state(self):
+        if not self.export_mode:
+            return ("● 请先选模式", "")
+        if self._is_mode_coords_ready(self.export_mode):
+            return ("● 坐标已就绪", "ready")
+        return ("● 未录制坐标", "")
+
+    def _refresh_coord_badge(self):
+        txt, mode = self._get_badge_state()
+        self._js("updateGuideBadge", txt, mode)
+
     # ─── JS API 暴露方法 (供前端 WebView2 调用) ───
     def ui_ready(self):
         self._ui_ready = True
         self._snap_to_bottom_right()
         sys.stdout = self._LogWriter(self)
+        badge_text, badge_mode = self._get_badge_state()
         self._js("initAppState", {
             "res": f"{self.sys_res[0]}×{self.sys_res[1]}",
             "api_key": self.api_key,
             "api_model": self.api_model,
             "draft_dir": self.draft_dir_val,
-            "coords_ready": bool(self.coords.get("export")),
+            "export_mode": self.export_mode,
+            "step_waits": self.step_waits,
+            "badge_text": badge_text,
+            "badge_mode": badge_mode,
         })
         self.after(400, self._show_startup_guide)
         self.after(800, self._check_auth)
@@ -551,8 +605,56 @@ class App:
         if confirmed and cb:
             threading.Thread(target=cb, daemon=True).start()
 
+    def set_export_mode(self, mode):
+        if mode not in ("return_home", "wait_close"):
+            return
+        if self.rec_state:
+            self.cancel_wizard(silent=True)
+        self.export_mode = mode
+        self._save_cfg()
+        self._refresh_coord_badge()
+        if mode == "return_home":
+            self._log("已选择【收起至首页模式】(录制3步：导出 → 确认导出 → 收起至首页)")
+        else:
+            self._log("已选择【等待导出完成关闭模式】(录制4步：导出 → 确认导出 → 关闭按钮 → 右上角关闭)")
+
     def start_wizard(self):
         self._start_wizard()
+
+    def cancel_wizard(self, silent=False):
+        self.rec_state = None
+        self._js("showWizardModal", {"active": False})
+        self._refresh_coord_badge()
+        if not silent:
+            self._log("已取消坐标录制")
+
+    def save_step_waits(self, waits):
+        if isinstance(waits, dict):
+            for k in ("open_draft", "export", "confirm", "popup_close", "close_btn", "draft_close"):
+                if k in waits:
+                    try:
+                        val = round(max(0.1, float(waits[k])), 1)
+                        self.step_waits[k] = val
+                    except Exception:
+                        pass
+        self._save_cfg()
+        if self.export_mode == "wait_close":
+            summary = (
+                f"打开草稿:{self.step_waits['open_draft']:g}s | "
+                f"导出:{self.step_waits['export']:g}s | "
+                f"确认:{self.step_waits['confirm']:g}s | "
+                f"关闭弹窗:{self.step_waits['close_btn']:g}s | "
+                f"右上角关闭:{self.step_waits['draft_close']:g}s"
+            )
+        else:
+            summary = (
+                f"打开草稿:{self.step_waits['open_draft']:g}s | "
+                f"导出:{self.step_waits['export']:g}s | "
+                f"确认:{self.step_waits['confirm']:g}s | "
+                f"收起至首页:{self.step_waits['popup_close']:g}s"
+            )
+        self._log(f"⏱ 步骤等待已更新 → {summary}")
+        self._show_toast("等待时间已保存", summary, C_SUCCESS, 3500)
 
     def scan_drafts(self):
         self._scan_thread()
@@ -670,6 +772,87 @@ class App:
         if self.window:
             self.window.minimize()
 
+    def _get_hwnd(self):
+        try:
+            user32 = ctypes.windll.user32
+            return user32.FindWindowW(None, "JIANYING AI PRO")
+        except Exception:
+            return None
+
+    def toggle_maximize_win(self):
+        try:
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+            hwnd = self._get_hwnd()
+            if not hwnd:
+                return
+            wa = wintypes.RECT()
+            user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(wa), 0)
+            wr = wintypes.RECT()
+            user32.GetWindowRect(hwnd, ctypes.byref(wr))
+            if not self._is_maximized:
+                self._restore_rect = (wr.left, wr.top, wr.right - wr.left, wr.bottom - wr.top)
+                margin = 8
+                nx = wa.left + margin
+                ny = wa.top + margin
+                nw = max(self._min_phys_w, (wa.right - wa.left) - margin * 2)
+                nh = max(self._min_phys_h, (wa.bottom - wa.top) - margin * 2)
+                user32.SetWindowPos(hwnd, -1, nx, ny, nw, nh, 0x0004)
+                self._is_maximized = True
+            else:
+                if self._restore_rect:
+                    rx, ry, rw, rh = self._restore_rect
+                    user32.SetWindowPos(hwnd, -1, rx, ry, max(self._min_phys_w, rw), max(self._min_phys_h, rh), 0x0004)
+                self._is_maximized = False
+        except Exception:
+            pass
+
+    def begin_resize(self, direction):
+        if self._resizing:
+            return
+        self._resizing = True
+        self._is_maximized = False
+
+        def _resize_worker():
+            try:
+                from ctypes import wintypes
+                user32 = ctypes.windll.user32
+                hwnd = self._get_hwnd()
+                if not hwnd:
+                    return
+                pt0 = wintypes.POINT()
+                user32.GetCursorPos(ctypes.byref(pt0))
+                wr0 = wintypes.RECT()
+                user32.GetWindowRect(hwnd, ctypes.byref(wr0))
+                l0, t0, r0, b0 = wr0.left, wr0.top, wr0.right, wr0.bottom
+                min_w = max(400, self._min_phys_w)
+                min_h = max(360, self._min_phys_h)
+
+                while (user32.GetAsyncKeyState(0x01) & 0x8000) != 0:
+                    pt = wintypes.POINT()
+                    user32.GetCursorPos(ctypes.byref(pt))
+                    dx = pt.x - pt0.x
+                    dy = pt.y - pt0.y
+
+                    nl, nt, nr, nb = l0, t0, r0, b0
+                    if "e" in direction:
+                        nr = max(l0 + min_w, r0 + dx)
+                    if "s" in direction:
+                        nb = max(t0 + min_h, b0 + dy)
+                    if "w" in direction:
+                        nl = min(r0 - min_w, l0 + dx)
+                    if "n" in direction:
+                        nt = min(b0 - min_h, t0 + dy)
+
+                    user32.SetWindowPos(hwnd, -1, nl, nt, nr - nl, nb - nt, 0x0010 | 0x0004)
+                    time.sleep(0.012)
+            except Exception:
+                pass
+            finally:
+                self._resizing = False
+
+        threading.Thread(target=_resize_worker, daemon=True).start()
+
     def close_win(self):
         if self.window:
             self.window.destroy()
@@ -786,12 +969,10 @@ del /f /q "%~f0" >nul 2>&1
             self.first_run = False
             self._save_cfg()
             
-            if self.sys_res == self.default_res:
-                self.after(500, lambda: self._show_toast("坐标已自动适配", "检测到您的分辨率与默认配置匹配\n已自动为您填入推荐坐标，无需再次录制！", C_SUCCESS, 6000))
-                
             msg = (
                 "1. 请不要把本程序窗口遮挡住剪映的草稿封面\n"
-                "2. 录制坐标请用废弃草稿进行，避免误操作\n\n"
+                "2. 请先选择【收起至首页模式】或【等待完成关闭模式】后再录制坐标\n"
+                "3. 录制完成后可自定义各个步骤后的等待时间\n\n"
                 "【网络建议】\n"
                 "本程序核心 AI 强依赖 Google Gemini。\n"
                 "• 强烈建议在设置中填入您自己的 API Key\n"
@@ -805,14 +986,26 @@ del /f /q "%~f0" >nul 2>&1
                 with open(CFG_FILE, 'r', encoding='utf-8') as f:
                     d = json.load(f)
                 loaded_coords = d.get("coords")
-                if loaded_coords and loaded_coords.get("export"):
-                    if "close_btn" not in loaded_coords:
-                        loaded_coords["close_btn"] = None
+                if loaded_coords and isinstance(loaded_coords, dict):
+                    for k in ("export", "confirm", "popup_close", "close_btn", "draft_close"):
+                        if k not in loaded_coords:
+                            loaded_coords[k] = None
                     self.coords = loaded_coords
                 
                 loaded_color = d.get("color")
                 if loaded_color:
                     self.close_color = tuple(loaded_color)
+                loaded_mode = d.get("export_mode", "")
+                if loaded_mode in ("return_home", "wait_close"):
+                    self.export_mode = loaded_mode
+                loaded_waits = d.get("step_waits")
+                if isinstance(loaded_waits, dict):
+                    for k in ("open_draft", "export", "confirm", "popup_close", "close_btn", "draft_close"):
+                        if k in loaded_waits:
+                            try:
+                                self.step_waits[k] = round(max(0.1, float(loaded_waits[k])), 1)
+                            except Exception:
+                                pass
                 self.api_key = d.get("api_key", DEFAULT_KEY)
                 self.first_run = d.get("first_run", True)
                 self.first_sub = False
@@ -822,21 +1015,73 @@ del /f /q "%~f0" >nul 2>&1
     def _save_cfg(self):
         try:
             with open(CFG_FILE, "w", encoding='utf-8') as f:
-                json.dump({"coords": self.coords, "color": self.close_color,
-                        "api_key": (self.api_key or "").strip(),
-                        "first_run": self.first_run,
-                        "first_sub": False,
-                        "api_model": getattr(self, 'api_model', "gemini-3.5-flash")}, f)
+                json.dump({
+                    "coords": self.coords,
+                    "color": self.close_color,
+                    "export_mode": self.export_mode,
+                    "step_waits": self.step_waits,
+                    "api_key": (self.api_key or "").strip(),
+                    "first_run": self.first_run,
+                    "first_sub": False,
+                    "api_model": getattr(self, 'api_model', "gemini-3.5-flash")
+                }, f, ensure_ascii=False, indent=2)
         except: pass
 
-    # ═══════════════════════ 坐标向导 ═══════════════════════
+    # ═══════════════════════ 坐标向导 (按模式动态步骤 + 居中醒目弹窗) ═══════════════════════
+    def _get_wizard_steps(self):
+        if self.export_mode == "return_home":
+            return [
+                ("export",      "导出按钮",   "第 1 / 3 步：录制【导出】按钮",       "请打开剪映草稿，将鼠标移至右上角【导出】按钮上"),
+                ("confirm",     "确认导出",   "第 2 / 3 步：录制【确认导出】按钮",   "请点击导出呼出弹窗，将鼠标移至弹窗内【导出/确认导出】按钮上"),
+                ("popup_close", "收起至首页", "第 3 / 3 步：录制【收起至首页】按钮", "开始导出后，将鼠标移至弹窗上亮起的【收起至首页】按钮上"),
+            ]
+        elif self.export_mode == "wait_close":
+            return [
+                ("export",      "导出按钮",   "第 1 / 4 步：录制【导出】按钮",         "请打开剪映草稿，将鼠标移至右上角【导出】按钮上"),
+                ("confirm",     "确认导出",   "第 2 / 4 步：录制【确认导出】按钮",     "请点击导出呼出弹窗，将鼠标移至弹窗内【导出/确认导出】按钮上"),
+                ("close_btn",   "关闭按钮",   "第 3 / 4 步：录制导出完成【关闭】按钮", "等待视频导出完成后，将鼠标移至弹窗的【关闭】按钮上"),
+                ("draft_close", "右上角关闭", "第 4 / 4 步：录制右上角【关闭】按钮",   "关闭导出弹窗后，将鼠标移至剪映窗口右上角的【关闭(×)】按钮上"),
+            ]
+        return []
+
+    def _sync_wizard_modal(self):
+        steps = self._get_wizard_steps()
+        if not self.rec_state or not steps:
+            self._js("showWizardModal", {"active": False})
+            return
+        total = len(steps)
+        labels = [s[1] for s in steps]
+        for idx, (st_key, _, title, desc) in enumerate(steps, 1):
+            if st_key == self.rec_state:
+                self.guide_lbl.configure(text=f"● 录制中 {idx}/{total}")
+                self._js("showWizardModal", {
+                    "active": True,
+                    "mode_name": self._mode_label(),
+                    "step_num": idx,
+                    "total_steps": total,
+                    "title": title,
+                    "desc": desc,
+                    "steps_labels": labels,
+                })
+                break
+
     def _start_wizard(self):
+        if self.export_mode not in ("return_home", "wait_close"):
+            self._ask_yes_no(
+                "请先选择导出模式",
+                "开始录制坐标前，请先在上方选择一种导出模式：\n\n"
+                "• 【收起至首页模式】：共录制 3 步（导出 → 确认导出 → 收起至首页）\n"
+                "• 【等待完成关闭模式】：共录制 4 步（导出 → 确认导出 → 关闭按钮 → 右上角关闭）",
+                lambda: None,
+                show_cancel=False
+            )
+            return
         self.rec_state = "export"
-        self.guide_lbl.configure(text="[1/5] 鼠标放在【导出】上 → 按 F8")
-        self._log("向导开始，请按 F8 录制各按钮位置")
+        self._sync_wizard_modal()
+        self._log(f"向导开始【{self._mode_label()}】，请按弹窗提示移动鼠标并按 F8 录制")
     
     def _capture_btn_template(self, x, y, name):
-        """录制时截取按钮区域保存为模板图片"""
+        '''录制时截取按钮区域保存为模板图片'''
         try:
             w, h = 100, 44
             rx, ry = max(0, x - w // 2), max(0, y - h // 2)
@@ -849,41 +1094,46 @@ del /f /q "%~f0" >nul 2>&1
             self._log(f"  ⚠ 截图失败: {e}")
 
     def _on_key(self, key):
-        if self.rec_state:
-            if key == keyboard.Key.f8:
-                x, y = pyautogui.position()
-                self.coords[self.rec_state] = (x, y)
-                if self.rec_state == "popup_close":
-                    r, g, b = pyautogui.pixel(x, y)
-                    self.close_color = (r, g, b)
-                    self._capture_btn_template(x, y, "return_home")
-                    self._log(f"  ✓ 收起至首页 ({x},{y}) RGB({r},{g},{b})")
-                elif self.rec_state == "close_btn":
-                    self._capture_btn_template(x, y, "close_popup")
-                    self._log(f"  ✓ 关闭弹窗 ({x},{y})")
-                else:
-                    self._log(f"  ✓ {self.rec_state} ({x},{y})")
-                self._next_rec()
-            elif key == keyboard.Key.f9 and self.rec_state in ["popup_close", "draft_close"]:
-                self.coords[self.rec_state] = None
-                self._log(f"  ✓ 跳过 {self.rec_state}")
-                self._next_rec()
+        if not self.rec_state:
+            return
+        if key == keyboard.Key.esc:
+            self.cancel_wizard()
+            return
+        if key == keyboard.Key.f8:
+            x, y = pyautogui.position()
+            self.coords[self.rec_state] = (x, y)
+            if self.rec_state == "popup_close":
+                r, g, b = pyautogui.pixel(x, y)
+                self.close_color = (r, g, b)
+                self._capture_btn_template(x, y, "return_home")
+                self._log(f"  ✓ 收起至首页 ({x},{y}) RGB({r},{g},{b})")
+            elif self.rec_state == "close_btn":
+                self._capture_btn_template(x, y, "close_popup")
+                self._log(f"  ✓ 关闭按钮 ({x},{y})")
+            elif self.rec_state == "draft_close":
+                self._log(f"  ✓ 右上角关闭按钮 ({x},{y})")
+            else:
+                self._log(f"  ✓ {self.rec_state} ({x},{y})")
+            self._next_rec()
     
     def _next_rec(self):
-        flow = {
-            "export":      ("confirm",     "2/5 点导出呼出弹窗 → 鼠标在【确认导出】上 → F8"),
-            "confirm":     ("popup_close", "3/5 鼠标在【收起至首页(亮起后)】上 → F8 (跳过按F9)"),
-            "popup_close": ("close_btn",   "4/5 鼠标在导出完成后的【关闭(X)】按钮上 → F8"),
-            "close_btn":   ("draft_close", "5/5 鼠标在【关闭草稿/返回首页】按钮上 → F8 (跳过按F9)"),
-            "draft_close": (None,          "● 坐标已就绪"),
-        }
-        nxt, txt = flow[self.rec_state]
+        steps = self._get_wizard_steps()
+        keys = [s[0] for s in steps]
+        if self.rec_state in keys:
+            idx = keys.index(self.rec_state)
+            nxt = keys[idx + 1] if idx + 1 < len(keys) else None
+        else:
+            nxt = None
+
         self.rec_state = nxt
-        self.guide_lbl.configure(text=txt)
-        
-        if nxt is None:
+        if nxt is not None:
+            self._sync_wizard_modal()
+        else:
+            self._js("showWizardModal", {"active": False})
             self._save_cfg()
-            self._log("向导完成，坐标已保存")
+            self._refresh_coord_badge()
+            self._log(f"✓ 【{self._mode_label()}】坐标录制完成，已自动弹出步骤等待设置")
+            self._js("openWaitModal", True)
 
     # ═══════════════════════ AI 扫描 ═══════════════════════
     def _get_api_err_msg(self, e):
@@ -958,7 +1208,7 @@ del /f /q "%~f0" >nul 2>&1
         except Exception as e:
             msg = self._get_api_err_msg(e)
             self._log(f"✗ {msg}"); self.status.configure(text="扫描失败")
-            self._show_toast("AI 扫描失败", m if 'm' in locals() else msg, C_DANGER, 6000)
+            self._show_toast("AI 扫描失败", msg, C_DANGER, 6000)
 
     def _fill_queue(self):
         items = [{"name": nm, "st": "待处理"} for _, _, nm in self.drafts]
@@ -970,14 +1220,24 @@ del /f /q "%~f0" >nul 2>&1
         self._log("🛑 中断"); self.start_btn.configure(state="normal")
         self.status.configure(text="已中断")
 
-    def _wait_done(self):
-        """等待导出完成，返回 'return_home' 或 'close' 表示检测到哪个按钮"""
+    def _sleep_wait(self, seconds):
+        total = max(0.0, float(seconds))
+        end_t = time.time() + total
+        while time.time() < end_t:
+            self._chk()
+            rem = end_t - time.time()
+            if rem <= 0:
+                break
+            time.sleep(min(0.1, rem))
+
+    def _wait_done(self, mode=None):
+        '''根据当前选择的导出模式，等待【收起至首页】或导出完成【关闭按钮】出现'''
+        target_mode = mode or self.export_mode
         rh = self.coords.get('popup_close')       # 收起至首页坐标
         cb = self.coords.get('close_btn')         # 关闭弹窗坐标
         
-        self._log("  · 等待导出弹窗 (0.5s)...")
-        time.sleep(0.5)
-        if self.stop_flag: return None
+        if self.stop_flag:
+            return None
         
         base = os.path.dirname(os.path.abspath(CFG_FILE)) or "."
         meipass = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -985,84 +1245,100 @@ del /f /q "%~f0" >nul 2>&1
         tpl_rh_bundled = os.path.join(meipass, "btn_bright.png")
         tpl_close = os.path.join(base, "tpl_close_popup.png")
         
-        self._log("  · 等待按钮就绪 (支持自动降级识别)...")
-        while not self.stop_flag:
-            if rh:
-                x_rh, y_rh = rh
-                for tpl_path in [tpl_rh, tpl_rh_bundled]:
-                    if not os.path.exists(tpl_path): continue
-                    try:
-                        rx = max(0, x_rh - 100); ry = max(0, y_rh - 60)
-                        loc = pyautogui.locateOnScreen(tpl_path, region=(rx, ry, 200, 120), confidence=0.82)
-                        if loc is not None:
-                            self._log("  ✓ 检测到【收起至首页】(局部模板匹配)")
-                            return "return_home"
-                    except Exception: pass
-                    try:
-                        loc = pyautogui.locateOnScreen(tpl_path, confidence=0.82)
-                        if loc is not None:
-                            self._log("  ✓ 检测到【收起至首页】(全屏模板匹配)")
-                            return "return_home"
-                    except Exception: pass
-                
-                for ox in [-25, -15, -5, 0, 5, 15, 25]:
-                    for oy in [-10, -5, 0, 5, 10]:
+        if target_mode == "return_home":
+            self._log("  · 等待【收起至首页】按钮亮起...")
+            while not self.stop_flag:
+                if rh:
+                    x_rh, y_rh = rh
+                    for tpl_path in [tpl_rh, tpl_rh_bundled]:
+                        if not os.path.exists(tpl_path): continue
                         try:
-                            r, g, b = pyautogui.pixel(x_rh + ox, y_rh + oy)
-                            if r < 80 and g > 130 and b > 130:
-                                self._log("  ✓ 检测到【收起至首页】(亮青色背景特征)")
+                            rx = max(0, x_rh - 100); ry = max(0, y_rh - 60)
+                            loc = pyautogui.locateOnScreen(tpl_path, region=(rx, ry, 200, 120), confidence=0.82)
+                            if loc is not None:
+                                self._log("  ✓ 检测到【收起至首页】(局部模板匹配)")
                                 return "return_home"
                         except Exception: pass
-            
-            close_pos = cb or (rh if not self.coords.get('close_btn') else None)
-            if os.path.exists(tpl_close):
-                try:
-                    if close_pos:
-                        rx = max(0, close_pos[0] - 100); ry = max(0, close_pos[1] - 60)
-                        loc = pyautogui.locateOnScreen(tpl_close, region=(rx, ry, 200, 120), confidence=0.82)
-                        if loc is not None:
-                            self._log("  ✓ 检测到【关闭】按钮 (局部模板匹配)")
-                            return "close"
-                except Exception: pass
-                try:
-                    loc = pyautogui.locateOnScreen(tpl_close, confidence=0.82)
-                    if loc is not None:
-                        self._log("  ✓ 检测到【关闭】按钮 (全屏模板匹配)")
-                        return "close"
-                except Exception: pass
-            
-            if close_pos:
-                cx, cy = close_pos
-                samples = []
-                for ox in [-20, -10, 0, 10, 20]:
-                    for oy in [-8, -4, 0, 4, 8]:
                         try:
-                            samples.append(pyautogui.pixel(cx + ox, cy + oy))
+                            loc = pyautogui.locateOnScreen(tpl_path, confidence=0.82)
+                            if loc is not None:
+                                self._log("  ✓ 检测到【收起至首页】(全屏模板匹配)")
+                                return "return_home"
                         except Exception: pass
-                if samples:
-                    max_b = max(max(r, g, b) for r, g, b in samples)
-                    min_b = min(min(r, g, b) for r, g, b in samples)
-                    contrast = max_b - min_b
-                    if max_b > 160 and contrast > 60:
-                        self._log("  ✓ 检测到【关闭】按钮 (结构对比度)")
-                        return "close"
                     
-            time.sleep(1)
-        return None
+                    for ox in [-25, -15, -5, 0, 5, 15, 25]:
+                        for oy in [-10, -5, 0, 5, 10]:
+                            try:
+                                r, g, b = pyautogui.pixel(x_rh + ox, y_rh + oy)
+                                if r < 80 and g > 130 and b > 130:
+                                    self._log("  ✓ 检测到【收起至首页】(亮青色背景特征)")
+                                    return "return_home"
+                            except Exception: pass
+                time.sleep(0.8)
+            return None
+
+        else:
+            self._log("  · 等待视频导出完成并出现【关闭】按钮...")
+            while not self.stop_flag:
+                close_pos = cb
+                if os.path.exists(tpl_close):
+                    try:
+                        if close_pos:
+                            rx = max(0, close_pos[0] - 100); ry = max(0, close_pos[1] - 60)
+                            loc = pyautogui.locateOnScreen(tpl_close, region=(rx, ry, 200, 120), confidence=0.82)
+                            if loc is not None:
+                                self._log("  ✓ 检测到【关闭】按钮 (局部模板匹配)")
+                                return "close"
+                    except Exception: pass
+                    try:
+                        loc = pyautogui.locateOnScreen(tpl_close, confidence=0.82)
+                        if loc is not None:
+                            self._log("  ✓ 检测到【关闭】按钮 (全屏模板匹配)")
+                            return "close"
+                    except Exception: pass
+                elif close_pos:
+                    cx, cy = close_pos
+                    samples = []
+                    has_cyan = False
+                    for ox in [-20, -10, 0, 10, 20]:
+                        for oy in [-8, -4, 0, 4, 8]:
+                            try:
+                                r, g, b = pyautogui.pixel(cx + ox, cy + oy)
+                                if r < 80 and g > 130 and b > 130:
+                                    has_cyan = True
+                                samples.append((r, g, b))
+                            except Exception: pass
+                    if samples and not has_cyan:
+                        max_b = max(max(r, g, b) for r, g, b in samples)
+                        min_b = min(min(r, g, b) for r, g, b in samples)
+                        contrast = max_b - min_b
+                        if max_b > 160 and contrast > 60:
+                            self._log("  ✓ 检测到【关闭】按钮 (结构对比度)")
+                            return "close"
+                time.sleep(1.0)
+            return None
 
     def _start_export(self, idx=0):
-        req = [self.coords.get("export"), self.coords.get("confirm")]
-        if None in req or (not self.coords.get("popup_close") and not self.coords.get("close_btn")):
-            self._show_toast("未就绪", "请先完成坐标录制 (至少包含导出、确认与关闭/收起)", C_WARN); return
+        if self.export_mode not in ("return_home", "wait_close"):
+            self._show_toast("请先选择模式", "请在上方选择【收起至首页模式】或【等待完成关闭模式】", C_WARN)
+            return
+        if not self._is_mode_coords_ready(self.export_mode):
+            self._show_toast("坐标未就绪", f"请先点击【引导录制 [F8]】完成【{self._mode_label()}】的坐标录制", C_WARN)
+            return
         if not self.drafts:
-            self._show_toast("未就绪", "请先 AI 扫描首页", C_WARN); return
+            self._show_toast("未就绪", "请先点击【AI 扫描草稿】识别剪映首页", C_WARN)
+            return
         if idx is None or idx < 0 or idx >= len(self.drafts):
             idx = 0
         
         nm = self.drafts[idx][2]
         n = len(self.drafts) - idx
         
-        self._ask_yes_no("确认开始", f"将从【{nm}】(第{idx+1}个) 开始\n共 {n} 个待导出，确认？", lambda: self._start_export_thread(idx))
+        self._ask_yes_no(
+            "确认开始批量导出",
+            f"当前模式：【{self._mode_label()}】\n将从【{nm}】(第{idx+1}个) 开始，共 {n} 个待导出，确认执行？",
+            lambda: self._start_export_thread(idx)
+        )
 
     def _start_export_thread(self, idx):
         self.stop_flag = False
@@ -1077,8 +1353,16 @@ del /f /q "%~f0" >nul 2>&1
 
     def _export_loop(self, start):
         try:
+            mode = self.export_mode
             total = len(self.drafts); n = total - start
-            self._log(f"\n{'─'*32}\n开始导出：共 {n} 个")
+            w_open = float(self.step_waits.get("open_draft", 8.0))
+            w_export = float(self.step_waits.get("export", 3.0))
+            w_confirm = float(self.step_waits.get("confirm", 1.0))
+            w_popup = float(self.step_waits.get("popup_close", 1.5))
+            w_close = float(self.step_waits.get("close_btn", 2.0))
+            w_draft_close = float(self.step_waits.get("draft_close", 1.5))
+
+            self._log(f"\n{'─'*32}\n开始导出【{self._mode_label(mode)}】：共 {n} 个")
             
             for i in range(start, total):
                 self._chk()
@@ -1088,42 +1372,38 @@ del /f /q "%~f0" >nul 2>&1
                 self._log(f"\n[{i+1}/{total}] {nm}")
                 
                 pyautogui.click(dx, dy)
-                self._log("  · 加载草稿 (8s)")
-                for _ in range(8): self._chk(); time.sleep(1)
+                self._log(f"  · 打开草稿 (等待 {w_open:g}s)")
+                self._sleep_wait(w_open)
                 
                 self._chk(); pyautogui.click(*self.coords['export'])
-                self._log("  · 点击导出")
-                for _ in range(3): self._chk(); time.sleep(1)
+                self._log(f"  · 点击导出 (等待 {w_export:g}s)")
+                self._sleep_wait(w_export)
                 
                 self._chk(); pyautogui.click(*self.coords['confirm'])
-                self._log("  · 确认导出")
-                time.sleep(1)
+                self._log(f"  · 确认导出 (等待 {w_confirm:g}s)")
+                self._sleep_wait(w_confirm)
                 pyautogui.press('enter')
                 
-                result = self._wait_done()
+                result = self._wait_done(mode)
                 self._chk()
                 
-                if result == "return_home":
-                    pyautogui.click(*self.coords['popup_close'])
-                    self._log("  · 已收起至首页 (后台导出)")
-                    time.sleep(1)
-                elif result == "close":
-                    cb = self.coords.get('close_btn') or self.coords.get('popup_close')
-                    if cb:
-                        pyautogui.click(*cb)
-                        self._log("  · 点击关闭弹窗")
-                    for _ in range(2): self._chk(); time.sleep(1)
-                    dc = self.coords.get('draft_close')
-                    if dc:
-                        self._chk(); pyautogui.click(*dc)
-                        self._log("  · 关闭草稿 → 返回首页")
+                if mode == "return_home":
+                    if self.coords.get('popup_close'):
+                        pyautogui.click(*self.coords['popup_close'])
+                        self._log(f"  · 已点击【收起至首页】 (等待 {w_popup:g}s)")
+                    self._sleep_wait(w_popup)
                 else:
-                    cb = self.coords.get('popup_close') or self.coords.get('close_btn')
-                    if cb: pyautogui.click(*cb)
+                    if self.coords.get('close_btn'):
+                        pyautogui.click(*self.coords['close_btn'])
+                        self._log(f"  · 已点击导出完成【关闭】按钮 (等待 {w_close:g}s)")
+                    self._sleep_wait(w_close)
+                    if self.coords.get('draft_close'):
+                        self._chk()
+                        pyautogui.click(*self.coords['draft_close'])
+                        self._log(f"  · 已点击右上角【关闭草稿】按钮 (等待 {w_draft_close:g}s)")
+                    self._sleep_wait(w_draft_close)
                 
                 self._qst(i, "✅ 完成")
-                self._log("  · 休息 1s")
-                for _ in range(2): self._chk(); time.sleep(0.5)
             
             self._log(f"\n🎉 全部完成！共导出 {n} 个")
             self.status.configure(text=f"完成 {n} 个")
@@ -1587,6 +1867,9 @@ del /f /q "%~f0" >nul 2>&1
             user32.GetWindowRect(hwnd, ctypes.byref(wr))
             actual_w = wr.right - wr.left
             actual_h = wr.bottom - wr.top
+            if actual_w > 0 and actual_h > 0:
+                self._min_phys_w = actual_w
+                self._min_phys_h = actual_h
             margin = 14
             nx = max(wa.left + margin, wa.right - actual_w - margin)
             ny = max(wa.top + margin, wa.bottom - actual_h - margin)
@@ -1595,7 +1878,7 @@ del /f /q "%~f0" >nul 2>&1
             pass
 
     def run(self):
-        # 标准大小 (780x540)，自动贴合屏幕右下角工作区
+        # 最小尺寸为当前标准大小 (520x480)，支持自由拖拽放大与最大化
         win_w, win_h = 520, 480
         try:
             from ctypes import wintypes
@@ -1606,6 +1889,8 @@ del /f /q "%~f0" >nul 2>&1
             scale = dpi / 96.0 if dpi else 1.5
             phys_w = int(win_w * scale)
             phys_h = int(win_h * scale)
+            self._min_phys_w = phys_w
+            self._min_phys_h = phys_h
             pos_x = max(10, int((wa.right - phys_w - 14) / scale))
             pos_y = max(10, int((wa.bottom - phys_h - 14) / scale))
         except Exception:
@@ -1618,9 +1903,10 @@ del /f /q "%~f0" >nul 2>&1
             js_api=self._api,
             width=win_w,
             height=win_h,
+            min_size=(win_w, win_h),
             x=pos_x,
             y=pos_y,
-            resizable=False,
+            resizable=True,
             frameless=True,
             easy_drag=False,
             on_top=True,
